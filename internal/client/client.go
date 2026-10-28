@@ -1,0 +1,210 @@
+// Package client manages the TCP connection to the phone. It merges
+// WifiSocket.java and ClientThread.java into one implementation and drops
+// the Bluetooth transport.
+package client
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/bluehandle-open/bluehandle-go/internal/consts"
+	"github.com/bluehandle-open/bluehandle-go/internal/input"
+	"github.com/bluehandle-open/bluehandle-go/internal/keymap"
+	"github.com/bluehandle-open/bluehandle-go/internal/protocol"
+)
+
+var (
+	ErrPhoneClosed      = errors.New("client: phone closed the connection")
+	ErrNotConnected     = errors.New("client: not connected")
+	ErrAlreadyConnected = errors.New("client: already connected or connecting")
+)
+
+const (
+	// DefaultReadTimeout is how long we wait for any frame before declaring
+	// the phone gone. The phone sends a heartbeat every second over Wi-Fi.
+	DefaultReadTimeout = 5 * time.Second
+	dialTimeout        = 5 * time.Second
+	writeTimeout       = 3 * time.Second
+)
+
+// Client is safe for concurrent use. One Client handles one connection at a
+// time; after Close or a remote disconnect it can Connect again.
+type Client struct {
+	kb input.Keyboard
+	ev Events
+
+	// ReadTimeout may be changed before Connect. Zero disables the timeout.
+	ReadTimeout time.Duration
+
+	mu    sync.Mutex
+	conn  net.Conn
+	state State
+	done  chan struct{}
+}
+
+// New returns a client that replays key events on kb and reports to ev.
+func New(kb input.Keyboard, ev Events) *Client {
+	if ev == nil {
+		ev = NopEvents{}
+	}
+	done := make(chan struct{})
+	close(done)
+	return &Client{kb: kb, ev: ev, ReadTimeout: DefaultReadTimeout, done: done}
+}
+
+// Connect dials the phone. addr is an IP or host; a port may be appended,
+// otherwise consts.Port is used. It returns once the TCP connection is up
+// and starts the read loop in the background.
+func (c *Client) Connect(ctx context.Context, addr string) error {
+	c.mu.Lock()
+	if c.state != Disconnected {
+		c.mu.Unlock()
+		return ErrAlreadyConnected
+	}
+	c.state = Connecting
+	c.mu.Unlock()
+	c.ev.OnState(Connecting, addr)
+
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		addr = net.JoinHostPort(addr, strconv.Itoa(consts.Port))
+	}
+	d := net.Dialer{Timeout: dialTimeout}
+	conn, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		c.mu.Lock()
+		c.state = Disconnected
+		c.mu.Unlock()
+		c.ev.OnState(Disconnected, err.Error())
+		return err
+	}
+
+	done := make(chan struct{})
+	c.mu.Lock()
+	c.conn, c.state, c.done = conn, Connected, done
+	c.mu.Unlock()
+	c.ev.OnState(Connected, conn.RemoteAddr().String())
+	go c.readLoop(conn, done)
+	return nil
+}
+
+// State reports the current connection state.
+func (c *Client) State() State {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.state
+}
+
+// Done returns a channel that is closed when the current connection's read
+// loop has exited. Before the first Connect it is already closed.
+func (c *Client) Done() <-chan struct{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.done
+}
+
+// SendKeySetting pushes one of the three key tables to the phone.
+func (c *Client) SendKeySetting(typ byte) error {
+	keys, ok := keymap.ByType(typ)
+	if !ok {
+		return fmt.Errorf("client: unknown key set 0x%02x", typ)
+	}
+	return c.Send(protocol.NewKeySetting(typ, keys))
+}
+
+// Send frames and writes m to the phone.
+func (c *Client) Send(m protocol.Message) error {
+	frame, err := protocol.EncodeToPhone(m)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return ErrNotConnected
+	}
+	_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	_, err = conn.Write(frame)
+	return err
+}
+
+// Close tells the phone we are leaving, then closes the socket. It does not
+// wait for the read loop; use Done for that. Closing a disconnected client
+// is a no-op.
+func (c *Client) Close() error {
+	c.mu.Lock()
+	conn := c.conn
+	if conn == nil {
+		c.mu.Unlock()
+		return nil
+	}
+	c.conn = nil
+	c.state = Disconnected
+	c.mu.Unlock()
+
+	frame, _ := protocol.EncodeToPhone(protocol.NewFinish())
+	_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	_, werr := conn.Write(frame)
+	cerr := conn.Close()
+	c.ev.OnState(Disconnected, "closed by user")
+	return errors.Join(werr, cerr)
+}
+
+func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
+	defer close(done)
+	r := bufio.NewReader(conn)
+	for {
+		if c.ReadTimeout > 0 {
+			_ = conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
+		}
+		m, err := protocol.ReadMessage(r)
+		if err != nil {
+			c.teardown(conn, err)
+			return
+		}
+		switch m.Type {
+		case consts.TypeKey:
+			ev, err := protocol.ParseKeyEvent(m)
+			if err != nil {
+				c.ev.OnError(err)
+				continue
+			}
+			if err := input.Apply(c.kb, ev); err != nil {
+				c.ev.OnError(err)
+			}
+		case consts.TypeFinish:
+			c.teardown(conn, ErrPhoneClosed)
+			return
+		case consts.TypeHeartBeatReq, consts.TypeHeartBeatRsp:
+			// Liveness only. The Java client never answered and the phone
+			// does not expect a reply; the read deadline does the rest.
+		default:
+			c.ev.OnError(fmt.Errorf("client: unknown message type 0x%02x", m.Type))
+		}
+	}
+}
+
+// teardown handles a connection ending from the read side. If Close already
+// detached conn it does nothing, so the UI sees exactly one Disconnected.
+func (c *Client) teardown(conn net.Conn, cause error) {
+	c.mu.Lock()
+	if c.conn != conn {
+		c.mu.Unlock()
+		return
+	}
+	c.conn = nil
+	c.state = Disconnected
+	c.mu.Unlock()
+	_ = conn.Close()
+	detail := ""
+	if cause != nil {
+		detail = cause.Error()
+	}
+	c.ev.OnState(Disconnected, detail)
+}
