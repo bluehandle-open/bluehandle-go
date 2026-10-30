@@ -13,8 +13,8 @@ import (
 )
 
 // Keyboard injects input into the local desktop. Key codes are Windows
-// virtual-key codes, already passed through keymap.Normalize; other
-// platforms translate them.
+// virtual-key codes exactly as they arrive on the wire; other platforms
+// translate them.
 type Keyboard interface {
 	Press(vk int) error
 	Release(vk int) error
@@ -31,14 +31,14 @@ type Keyboard interface {
 func Apply(kb Keyboard, ev protocol.KeyEvent) error {
 	if ev.Down {
 		for _, k := range ev.Keys {
-			if err := kb.Press(keymap.Normalize(k)); err != nil {
+			if err := kb.Press(k); err != nil {
 				return err
 			}
 		}
 	}
 	if ev.Up {
 		for _, k := range ev.Keys {
-			if err := kb.Release(keymap.Normalize(k)); err != nil {
+			if err := kb.Release(k); err != nil {
 				return err
 			}
 		}

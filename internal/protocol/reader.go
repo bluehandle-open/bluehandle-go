@@ -51,7 +51,7 @@ func ReadMessage(r *bufio.Reader) (Message, error) {
 type KeyEvent struct {
 	Down bool  // press every key in Keys
 	Up   bool  // release every key in Keys
-	Keys []int // wire key codes as sent; zero bytes are dropped. See keymap.Normalize
+	Keys []int // Windows virtual-key codes; zero bytes are dropped
 }
 
 // ParseKeyEvent decodes body[0] as press flags and body[1:] as key codes.

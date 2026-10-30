@@ -1,9 +1,7 @@
 // Package keymap holds the key code convention shared with the phone and the
 // three key tables the PC can push to it (KeySetting.java).
 //
-// Key codes on the wire are Windows virtual-key codes (VK_*). The Android
-// app's custom key table mixes in a few non-Windows values; Normalize maps
-// those so injectors only ever see Windows codes.
+// Key codes on the wire are Windows virtual-key codes (VK_*), one byte each.
 package keymap
 
 import (
@@ -46,25 +44,6 @@ const (
 	VKOemMinus  = 0xBD // '-' on the main keyboard
 	VKOemPeriod = 0xBE // '.' on the main keyboard
 )
-
-// legacy maps codes from the Android app's original key table that are not
-// Windows codes. 0x7F is VK_F16 on Windows but the app uses it for Delete,
-// which is by far the more useful key. Codes 59-64 (; < = > ? @) are ASCII
-// and undefined as Windows VKs, so they pass through for injectors to type
-// as characters.
-var legacy = map[int]int{
-	45:  VKOemMinus, // Windows VK_INSERT, but the app sends 45 for '-'
-	127: VKDelete,
-	155: VKInsert, // Java VK_INSERT
-}
-
-// Normalize converts a wire key code into a Windows virtual-key code.
-func Normalize(code int) int {
-	if vk, ok := legacy[code]; ok {
-		return vk
-	}
-	return code
-}
 
 // Handle is the gamepad table in the order the Java PC client sends it.
 // Letters and digits use their upper-case ASCII value, which equals the VK code.
@@ -125,12 +104,12 @@ var names = map[int]string{
 	VKOemMinus: "-", VKOemPeriod: ".",
 }
 
-// KeyName renders a Windows VK code (after Normalize) for logs and the UI.
+// KeyName renders a Windows VK code for logs and the UI.
 func KeyName(code int) string {
 	if n, ok := names[code]; ok {
 		return n
 	}
-	if (code >= 'A' && code <= 'Z') || (code >= '0' && code <= '9') || (code >= ';' && code <= '@') {
+	if (code >= 'A' && code <= 'Z') || (code >= '0' && code <= '9') {
 		return string(rune(code))
 	}
 	return fmt.Sprintf("vk%d", code)

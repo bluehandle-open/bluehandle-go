@@ -123,7 +123,7 @@ func TestTextLockAndUnknownTypes(t *testing.T) {
 	phone.Write([]byte{0x50, 0x03, 0x01})                                 // Enter only
 	phone.Write([]byte{0x7E, 0x04, 0xAA, 0xBB})                           // unknown type is skipped
 	phone.Write([]byte{0x51, 0x02})                                       // lock screen
-	phone.Write([]byte{0x02, 0x04, 0x03, 127})                            // legacy Delete
+	phone.Write([]byte{0x02, 0x04, 0x03, 0x2E})                           // Delete
 	phone.Write([]byte{0x40, 0x02})
 	waitDone(t, c)
 
