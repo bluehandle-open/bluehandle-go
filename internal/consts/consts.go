@@ -27,8 +27,19 @@ const (
 	TypeFinish       byte = 0x40 // either side: peer is going away
 	TypeHeartBeatReq byte = 0x41 // phone -> PC every second on Wi-Fi
 	TypeHeartBeatRsp byte = 0x42 // defined on both sides, never sent
-	TypeText         byte = 0x50 // reserved for voice input text; not implemented yet
+	TypeText         byte = 0x50 // phone -> PC: UTF-8 text to type, see TextFlagEnter
+	TypeLockScreen   byte = 0x51 // phone -> PC: lock the workstation, empty body
 )
+
+// Flags in the first body byte of a TypeText message.
+const (
+	// TextFlagEnter asks for an Enter key press after the text is typed.
+	TextFlagEnter byte = 1
+)
+
+// MaxTextChunk is the largest UTF-8 body a phone puts in one TypeText frame.
+// Longer text arrives as several frames split on character boundaries.
+const MaxTextChunk = 120
 
 // Flags in the first body byte of a TypeKey message. They may be combined.
 const (

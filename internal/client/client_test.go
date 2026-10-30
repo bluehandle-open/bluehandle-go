@@ -27,6 +27,7 @@ func (r *recorder) add(s string) {
 func (r *recorder) Press(c int) error       { r.add(fmt.Sprintf("press %d", c)); return nil }
 func (r *recorder) Release(c int) error     { r.add(fmt.Sprintf("release %d", c)); return nil }
 func (r *recorder) TypeText(s string) error { r.add("type " + s); return nil }
+func (r *recorder) LockScreen() error       { r.add("lock"); return nil }
 func (r *recorder) snapshot() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -103,6 +104,38 @@ func TestKeyEventsReachKeyboardAndFinishDisconnects(t *testing.T) {
 	}
 	if got := st.snapshot(); !reflect.DeepEqual(got, []State{Connecting, Connected, Disconnected}) {
 		t.Fatalf("states %v", got)
+	}
+}
+
+func TestTextLockAndUnknownTypes(t *testing.T) {
+	addr, accepted := fakePhone(t)
+	kb := &recorder{}
+	c := New(kb, nil)
+	if err := c.Connect(context.Background(), addr); err != nil {
+		t.Fatal(err)
+	}
+	phone := <-accepted
+	defer phone.Close()
+
+	text := []byte("你好")
+	phone.Write(append([]byte{0x50, byte(3 + len(text)), 0x00}, text...)) // text only
+	phone.Write([]byte{0x50, 0x04, 0x01, 'a'})                            // text + Enter
+	phone.Write([]byte{0x50, 0x03, 0x01})                                 // Enter only
+	phone.Write([]byte{0x7E, 0x04, 0xAA, 0xBB})                           // unknown type is skipped
+	phone.Write([]byte{0x51, 0x02})                                       // lock screen
+	phone.Write([]byte{0x02, 0x04, 0x03, 127})                            // legacy Delete
+	phone.Write([]byte{0x40, 0x02})
+	waitDone(t, c)
+
+	want := []string{
+		"type 你好",
+		"type a", "press 13", "release 13",
+		"press 13", "release 13",
+		"lock",
+		"press 46", "release 46",
+	}
+	if got := kb.snapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("keyboard got %v, want %v", got, want)
 	}
 }
 

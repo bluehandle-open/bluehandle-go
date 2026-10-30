@@ -12,13 +12,18 @@ import (
 	"github.com/bluehandle-open/bluehandle-go/internal/protocol"
 )
 
-// Keyboard injects input into the local desktop. Key codes are Java VK codes
-// exactly as they arrive on the wire; implementations translate them.
+// Keyboard injects input into the local desktop. Key codes are Windows
+// virtual-key codes, already passed through keymap.Normalize; other
+// platforms translate them.
 type Keyboard interface {
-	Press(javaKeyCode int) error
-	Release(javaKeyCode int) error
-	// TypeText types a Unicode string. Reserved for voice input.
+	Press(vk int) error
+	Release(vk int) error
+	// TypeText types a Unicode string independent of the active input method
+	// (SendInput with KEYEVENTF_UNICODE on Windows).
 	TypeText(text string) error
+	// LockScreen locks the workstation (LockWorkStation on Windows; a
+	// synthesized Win+L is swallowed by the system).
+	LockScreen() error
 }
 
 // Apply replays ev on kb in the same order as KeyProcessUtil.fireKeyEvent:
@@ -26,17 +31,33 @@ type Keyboard interface {
 func Apply(kb Keyboard, ev protocol.KeyEvent) error {
 	if ev.Down {
 		for _, k := range ev.Keys {
-			if err := kb.Press(k); err != nil {
+			if err := kb.Press(keymap.Normalize(k)); err != nil {
 				return err
 			}
 		}
 	}
 	if ev.Up {
 		for _, k := range ev.Keys {
-			if err := kb.Release(k); err != nil {
+			if err := kb.Release(keymap.Normalize(k)); err != nil {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// ApplyText types ev.Text, then taps Enter if requested.
+func ApplyText(kb Keyboard, ev protocol.TextEvent) error {
+	if ev.Text != "" {
+		if err := kb.TypeText(ev.Text); err != nil {
+			return err
+		}
+	}
+	if ev.Enter {
+		if err := kb.Press(keymap.VKEnter); err != nil {
+			return err
+		}
+		return kb.Release(keymap.VKEnter)
 	}
 	return nil
 }
@@ -46,17 +67,22 @@ type Printer struct {
 	W io.Writer
 }
 
-func (p Printer) Press(code int) error {
-	_, err := fmt.Fprintf(p.W, "press %s\n", keymap.KeyName(code))
+func (p Printer) Press(vk int) error {
+	_, err := fmt.Fprintf(p.W, "press %s\n", keymap.KeyName(vk))
 	return err
 }
 
-func (p Printer) Release(code int) error {
-	_, err := fmt.Fprintf(p.W, "release %s\n", keymap.KeyName(code))
+func (p Printer) Release(vk int) error {
+	_, err := fmt.Fprintf(p.W, "release %s\n", keymap.KeyName(vk))
 	return err
 }
 
 func (p Printer) TypeText(text string) error {
 	_, err := fmt.Fprintf(p.W, "type %q\n", text)
+	return err
+}
+
+func (p Printer) LockScreen() error {
+	_, err := fmt.Fprintln(p.W, "lock screen")
 	return err
 }

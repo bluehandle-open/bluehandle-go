@@ -37,7 +37,19 @@ func TestByTypeReturnsCopy(t *testing.T) {
 }
 
 func TestKeyName(t *testing.T) {
-	if KeyName('W') != "W" || KeyName(VKF5) != "F5" || KeyName(200) != "vk200" {
+	if KeyName('W') != "W" || KeyName(VKF5) != "F5" || KeyName(VKLWin) != "win" || KeyName(200) != "vk200" {
 		t.Fatal("unexpected key names")
+	}
+}
+
+func TestNormalize(t *testing.T) {
+	cases := map[int]int{
+		45: VKOemMinus, 127: VKDelete, 155: VKInsert, // legacy Android codes
+		VKEnter: VKEnter, 'W': 'W', VKLWin: VKLWin, VKMediaPlayPause: VKMediaPlayPause, ';': ';',
+	}
+	for in, want := range cases {
+		if got := Normalize(in); got != want {
+			t.Errorf("Normalize(%d) = %d, want %d", in, got, want)
+		}
 	}
 }

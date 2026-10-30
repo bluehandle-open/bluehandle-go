@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/bluehandle-open/bluehandle-go/internal/consts"
 )
@@ -50,7 +51,7 @@ func ReadMessage(r *bufio.Reader) (Message, error) {
 type KeyEvent struct {
 	Down bool  // press every key in Keys
 	Up   bool  // release every key in Keys
-	Keys []int // java.awt.event.KeyEvent VK_* codes; zero bytes are dropped
+	Keys []int // wire key codes as sent; zero bytes are dropped. See keymap.Normalize
 }
 
 // ParseKeyEvent decodes body[0] as press flags and body[1:] as key codes.
@@ -74,4 +75,30 @@ func ParseKeyEvent(m Message) (KeyEvent, error) {
 		}
 	}
 	return ev, nil
+}
+
+// TextEvent is a decoded TypeText message.
+type TextEvent struct {
+	Text  string // may be empty when the phone only wants Enter
+	Enter bool   // press Enter after typing Text
+}
+
+// ParseText decodes body[0] as flags and body[1:] as UTF-8 text. The phone
+// never splits a character across frames, so each frame must be valid UTF-8
+// on its own.
+func ParseText(m Message) (TextEvent, error) {
+	if m.Type != consts.TypeText {
+		return TextEvent{}, ErrNotText
+	}
+	if len(m.Body) == 0 {
+		return TextEvent{}, ErrEmptyBody
+	}
+	text := m.Body[1:]
+	if !utf8.Valid(text) {
+		return TextEvent{}, ErrBadUTF8
+	}
+	return TextEvent{
+		Text:  string(text),
+		Enter: m.Body[0]&consts.TextFlagEnter != 0,
+	}, nil
 }

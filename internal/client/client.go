@@ -178,6 +178,19 @@ func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
 			if err := input.Apply(c.kb, ev); err != nil {
 				c.ev.OnError(err)
 			}
+		case consts.TypeText:
+			ev, err := protocol.ParseText(m)
+			if err != nil {
+				c.ev.OnError(err)
+				continue
+			}
+			if err := input.ApplyText(c.kb, ev); err != nil {
+				c.ev.OnError(err)
+			}
+		case consts.TypeLockScreen:
+			if err := c.kb.LockScreen(); err != nil {
+				c.ev.OnError(err)
+			}
 		case consts.TypeFinish:
 			c.teardown(conn, ErrPhoneClosed)
 			return
@@ -185,6 +198,8 @@ func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
 			// Liveness only. The Java client never answered and the phone
 			// does not expect a reply; the read deadline does the rest.
 		default:
+			// Newer phones may send types we do not know yet. ReadMessage has
+			// already consumed the whole frame, so report it and keep going.
 			c.ev.OnError(fmt.Errorf("client: unknown message type 0x%02x", m.Type))
 		}
 	}

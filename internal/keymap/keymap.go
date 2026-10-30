@@ -1,6 +1,11 @@
-// Package keymap holds the three key tables the PC can push to the phone.
-// It mirrors KeySetting.java; values are java.awt.event.KeyEvent VK_* codes
-// because that is what the Android app stores and sends back.
+// Package keymap holds the key code convention shared with the phone and the
+// three key tables the PC can push to it (KeySetting.java).
+//
+// Key codes on the wire are Windows virtual-key codes (VK_*). The Android
+// app's original table mixed in a few Java/ASCII values; Normalize maps those
+// back so injectors only ever see Windows codes. For letters, digits, arrows,
+// F-keys, Shift/Ctrl/Alt and Esc the two conventions agree, which is why the
+// tables below are unchanged from the Java client.
 package keymap
 
 import (
@@ -9,19 +14,59 @@ import (
 	"github.com/bluehandle-open/bluehandle-go/internal/consts"
 )
 
-// Java VK codes that are not plain ASCII letters or digits.
+// Windows virtual-key codes that are not plain ASCII letters or digits.
 const (
-	VKShift   = 16
-	VKControl = 17
-	VKAlt     = 18
-	VKEscape  = 27
-	VKLeft    = 37
-	VKUp      = 38
-	VKRight   = 39
-	VKDown    = 40
-	VKF5      = 116
-	VKF6      = 117
+	VKBack     = 0x08
+	VKTab      = 0x09
+	VKEnter    = 0x0D
+	VKShift    = 0x10
+	VKControl  = 0x11
+	VKAlt      = 0x12
+	VKEscape   = 0x1B
+	VKSpace    = 0x20
+	VKPageUp   = 0x21
+	VKPageDown = 0x22
+	VKLeft     = 0x25
+	VKUp       = 0x26
+	VKRight    = 0x27
+	VKDown     = 0x28
+	VKInsert   = 0x2D
+	VKDelete   = 0x2E
+	VKLWin     = 0x5B
+	VKApps     = 0x5D // context menu key
+	VKF5       = 0x74
+	VKF6       = 0x75
+
+	VKVolumeMute     = 0xAD
+	VKVolumeDown     = 0xAE
+	VKVolumeUp       = 0xAF
+	VKMediaNext      = 0xB0
+	VKMediaPrev      = 0xB1
+	VKMediaStop      = 0xB2
+	VKMediaPlayPause = 0xB3
+
+	VKOemMinus  = 0xBD // '-' on the main keyboard
+	VKOemPeriod = 0xBE // '.' on the main keyboard
 )
+
+// legacy maps codes from the Android app's original key table that are not
+// Windows codes. 0x7F is VK_F16 on Windows but the app uses it for Delete,
+// which is by far the more useful key. Codes 59-64 (; < = > ? @) are ASCII
+// and undefined as Windows VKs, so they pass through for injectors to type
+// as characters.
+var legacy = map[int]int{
+	45:  VKOemMinus, // Windows VK_INSERT, but the app sends 45 for '-'
+	127: VKDelete,
+	155: VKInsert, // Java VK_INSERT
+}
+
+// Normalize converts a wire key code into a Windows virtual-key code.
+func Normalize(code int) int {
+	if vk, ok := legacy[code]; ok {
+		return vk
+	}
+	return code
+}
 
 // Handle is the gamepad table in the order the Java PC client sends it.
 // Letters and digits use their upper-case ASCII value, which equals the VK code.
@@ -71,17 +116,23 @@ func TypeByName(name string) (byte, bool) {
 }
 
 var names = map[int]string{
-	VKShift: "shift", VKControl: "ctrl", VKAlt: "alt", VKEscape: "esc",
+	VKBack: "backspace", VKTab: "tab", VKEnter: "enter",
+	VKShift: "shift", VKControl: "ctrl", VKAlt: "alt", VKEscape: "esc", VKSpace: "space",
+	VKPageUp: "pageup", VKPageDown: "pagedown",
 	VKLeft: "left", VKUp: "up", VKRight: "right", VKDown: "down",
+	VKInsert: "insert", VKDelete: "delete", VKLWin: "win", VKApps: "menu",
 	VKF5: "F5", VKF6: "F6",
+	VKVolumeMute: "mute", VKVolumeDown: "volumedown", VKVolumeUp: "volumeup",
+	VKMediaNext: "next", VKMediaPrev: "prev", VKMediaStop: "stop", VKMediaPlayPause: "playpause",
+	VKOemMinus: "-", VKOemPeriod: ".",
 }
 
-// KeyName renders a Java VK code for logs and the UI.
+// KeyName renders a Windows VK code (after Normalize) for logs and the UI.
 func KeyName(code int) string {
 	if n, ok := names[code]; ok {
 		return n
 	}
-	if (code >= 'A' && code <= 'Z') || (code >= '0' && code <= '9') {
+	if (code >= 'A' && code <= 'Z') || (code >= '0' && code <= '9') || (code >= ';' && code <= '@') {
 		return string(rune(code))
 	}
 	return fmt.Sprintf("vk%d", code)

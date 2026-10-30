@@ -29,6 +29,8 @@ var (
 	ErrNotKeyEvent  = errors.New("protocol: not a key event message")
 	ErrEmptyBody    = errors.New("protocol: key event without body")
 	ErrBadHandshake = errors.New("protocol: unexpected server sign")
+	ErrNotText      = errors.New("protocol: not a text message")
+	ErrBadUTF8      = errors.New("protocol: text is not valid UTF-8")
 )
 
 // EncodeToPhone frames m as [totalLen, type, body..., CR, LF].

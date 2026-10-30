@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/bluehandle-open/bluehandle-go/internal/consts"
@@ -134,5 +135,47 @@ func TestReadHandshake(t *testing.T) {
 	err := ReadHandshake(bufio.NewReader(bytes.NewBufferString("something else\n")))
 	if !errors.Is(err, ErrBadHandshake) {
 		t.Fatalf("got %v, want ErrBadHandshake", err)
+	}
+}
+
+func TestParseText(t *testing.T) {
+	body := append([]byte{consts.TextFlagEnter}, "语音 input"...)
+	ev, err := ParseText(Message{Type: consts.TypeText, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (TextEvent{Text: "语音 input", Enter: true}); ev != want {
+		t.Fatalf("got %+v, want %+v", ev, want)
+	}
+
+	ev, err = ParseText(Message{Type: consts.TypeText, Body: []byte{0}})
+	if err != nil || ev != (TextEvent{}) {
+		t.Fatalf("empty text: %+v %v", ev, err)
+	}
+
+	// The first two bytes of "你" (e4 bd a0) are not a complete character.
+	_, err = ParseText(Message{Type: consts.TypeText, Body: []byte{0, 0xE4, 0xBD}})
+	if !errors.Is(err, ErrBadUTF8) {
+		t.Fatalf("got %v, want ErrBadUTF8", err)
+	}
+	if _, err := ParseText(Message{Type: consts.TypeText}); !errors.Is(err, ErrEmptyBody) {
+		t.Fatalf("got %v, want ErrEmptyBody", err)
+	}
+	if _, err := ParseText(Message{Type: consts.TypeKey, Body: []byte{0}}); !errors.Is(err, ErrNotText) {
+		t.Fatalf("got %v, want ErrNotText", err)
+	}
+}
+
+func TestReadLongestTextFrame(t *testing.T) {
+	// 40 three-byte characters fill the 120-byte chunk limit: totalLen = 2 + 1 + 120.
+	text := strings.Repeat("字", 40)
+	frame := append([]byte{consts.TypeText, 123, 0}, text...)
+	m, err := ReadMessage(bufio.NewReader(bytes.NewReader(frame)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := ParseText(m)
+	if err != nil || ev.Text != text {
+		t.Fatalf("got %+v %v", ev, err)
 	}
 }
