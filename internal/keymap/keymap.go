@@ -2,10 +2,8 @@
 // three key tables the PC can push to it (KeySetting.java).
 //
 // Key codes on the wire are Windows virtual-key codes (VK_*). The Android
-// app's original table mixed in a few Java/ASCII values; Normalize maps those
-// back so injectors only ever see Windows codes. For letters, digits, arrows,
-// F-keys, Shift/Ctrl/Alt and Esc the two conventions agree, which is why the
-// tables below are unchanged from the Java client.
+// app's custom key table mixes in a few non-Windows values; Normalize maps
+// those so injectors only ever see Windows codes.
 package keymap
 
 import (
