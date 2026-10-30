@@ -1,7 +1,5 @@
-// Command bluehandle connects to the phone and replays its key events.
-//
-// Phase 1 ships a command-line program that prints keystrokes instead of
-// injecting them; the robotgo keyboard and the Fyne window come later.
+// Command bluehandle connects to the phone and replays its key events, text
+// and lock screen requests on this machine. The Fyne window comes later.
 package main
 
 import (
@@ -25,9 +23,10 @@ func (logEvents) OnError(err error)                     { log.Printf("error: %v"
 func main() {
 	ip := flag.String("ip", "", "phone IP address (required)")
 	keys := flag.String("keys", "", "key table to push after connecting: handle, ppt or player")
+	dryRun := flag.Bool("dry-run", false, "print received input instead of typing it")
 	flag.Parse()
 	if *ip == "" {
-		fmt.Fprintln(os.Stderr, "usage: bluehandle -ip <phone ip> [-keys handle|ppt|player]")
+		fmt.Fprintln(os.Stderr, "usage: bluehandle -ip <phone ip> [-keys handle|ppt|player] [-dry-run]")
 		os.Exit(2)
 	}
 	var keySet byte
@@ -43,7 +42,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	c := client.New(input.Printer{W: os.Stdout}, logEvents{})
+	var kb input.Keyboard = input.Printer{W: os.Stdout}
+	if !*dryRun {
+		sys, err := input.NewSystem()
+		if err != nil {
+			log.Printf("%v; printing input instead", err)
+		} else {
+			kb = sys
+		}
+	}
+
+	c := client.New(kb, logEvents{})
 	if err := c.Connect(ctx, *ip); err != nil {
 		log.Fatal(err)
 	}

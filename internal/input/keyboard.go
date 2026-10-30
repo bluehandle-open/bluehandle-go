@@ -1,7 +1,7 @@
 // Package input turns decoded key events into keystrokes on this machine.
-// It replaces KeyProcessUtil.java. The robotgo-backed implementation is
-// added in a later phase; Printer exists so the rest of the program can be
-// exercised without cgo.
+// It replaces KeyProcessUtil.java. NewSystem returns the real implementation
+// for the current platform (SendInput on Windows); Printer only logs what it
+// would type and is used for -dry-run and tests.
 package input
 
 import (
@@ -24,6 +24,12 @@ type Keyboard interface {
 	// LockScreen locks the workstation (LockWorkStation on Windows; a
 	// synthesized Win+L is swallowed by the system).
 	LockScreen() error
+}
+
+// Releaser is implemented by keyboards that track held keys. The client
+// calls ReleaseAll when a connection ends so no key stays stuck down.
+type Releaser interface {
+	ReleaseAll() error
 }
 
 // Apply replays ev on kb in the same order as KeyProcessUtil.fireKeyEvent:

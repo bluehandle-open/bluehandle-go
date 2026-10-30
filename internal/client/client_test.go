@@ -139,6 +139,28 @@ func TestTextLockAndUnknownTypes(t *testing.T) {
 	}
 }
 
+type releasingRecorder struct{ recorder }
+
+func (r *releasingRecorder) ReleaseAll() error { r.add("release all"); return nil }
+
+func TestHeldKeysReleasedWhenPhoneDisappears(t *testing.T) {
+	addr, accepted := fakePhone(t)
+	kb := &releasingRecorder{}
+	c := New(kb, nil)
+	if err := c.Connect(context.Background(), addr); err != nil {
+		t.Fatal(err)
+	}
+	phone := <-accepted
+	phone.Write([]byte{0x02, 0x04, 0x01, 0x26}) // press Up, never released
+	phone.Close()
+	waitDone(t, c)
+
+	want := []string{"press 38", "release all"}
+	if got := kb.snapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("keyboard got %v, want %v", got, want)
+	}
+}
+
 func TestCloseSendsFinishAndKeySettingIsFramed(t *testing.T) {
 	addr, accepted := fakePhone(t)
 	c := New(&recorder{}, nil)

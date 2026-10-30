@@ -158,6 +158,13 @@ func (c *Client) Close() error {
 
 func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
 	defer close(done)
+	if r, ok := c.kb.(input.Releaser); ok {
+		defer func() {
+			if err := r.ReleaseAll(); err != nil {
+				c.ev.OnError(err)
+			}
+		}()
+	}
 	r := bufio.NewReader(conn)
 	for {
 		if c.ReadTimeout > 0 {
