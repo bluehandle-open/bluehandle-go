@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>蓝色手柄</title>
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<div class="titlebar">
+  <div class="logo" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><rect x="2" y="7" width="20" height="11" rx="5.5"/><path d="M7 11v3M5.5 12.5h3"/></svg></div>
+  <span>蓝色手柄</span>
+  <div class="grow"></div>
+  <button class="wbtn" id="btn-min" aria-label="最小化">
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor"/></svg>
+  </button>
+  <button class="wbtn close" id="btn-close" aria-label="关闭">
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg>
+  </button>
+</div>
+<main id="app" class="body"></main>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

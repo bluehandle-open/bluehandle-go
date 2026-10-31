@@ -1,5 +1,6 @@
-// Command bluehandle connects to the phone and replays its key events, text
-// and lock screen requests on this machine. The Fyne window comes later.
+// Command bluehandle-cli connects to the phone and replays its key events,
+// text and lock screen requests on this machine without a window. It is
+// meant for debugging; -dry-run only prints what it receives.
 package main
 
 import (
@@ -26,7 +27,7 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "print received input instead of typing it")
 	flag.Parse()
 	if *ip == "" {
-		fmt.Fprintln(os.Stderr, "usage: bluehandle -ip <phone ip> [-keys handle|ppt|player] [-dry-run]")
+		fmt.Fprintln(os.Stderr, "usage: bluehandle-cli -ip <phone ip> [-keys handle|ppt|player] [-dry-run]")
 		os.Exit(2)
 	}
 	var keySet byte

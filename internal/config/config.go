@@ -135,7 +135,7 @@ func (c *Config) Forget(addr string) {
 }
 
 // LastAddr is the most recently used phone, or "" if there is none.
-func (c *Config) LastAddr() string {
+func (c Config) LastAddr() string {
 	if len(c.Recent) == 0 {
 		return ""
 	}
