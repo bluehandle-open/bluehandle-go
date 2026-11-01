@@ -1,9 +1,10 @@
 """Draw the app icon and the three tray icons.
 
 Run from anywhere: python -I make_icons.py <output dir>
-Needs Pillow. The shapes follow the phone app's logo: a D-pad on a blue
-rounded square; tray icons add a status dot in the corner.
+Needs Pillow. The shapes follow the phone app's logo: a D-pad with signal
+arcs on a flat blue rounded square; tray icons add a status dot in the corner.
 """
+import math
 import sys
 from pathlib import Path
 
@@ -18,26 +19,32 @@ S = 512  # draw large, then downsample
 
 
 def logo() -> Image.Image:
-    """The phone app's launcher icon: a white D-pad with an orange centre key."""
+    """The phone app's launcher icon: a white D-pad with an orange centre and
+    two signal arcs in its top-right corner. Geometry matches the phone repo's
+    design/logo.py (108-unit canvas, scaled 0.82 and offset by (11.36, 8.08))."""
     im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, S - 1, S - 1), radius=S * 0.22, fill=BLUE)
     k = S / 72  # the phone icon's visible 72 units of its 108-unit canvas
 
     def p(x, y):
-        x = 54 + (x - 54) * 0.78
-        y = 54 + (y - 54) * 0.78
-        return (x - 18) * k, (y - 18) * k
+        return (x * 0.82 + 11.36 - 18) * k, (y * 0.82 + 8.08 - 18) * k
 
-    r = 5 * 0.78 * k
-    d.rounded_rectangle((*p(42, 24), *p(66, 84)), radius=r, fill=WHITE)
-    d.rounded_rectangle((*p(24, 42), *p(84, 66)), radius=r, fill=WHITE)
-    for tri in (((54, 30), (49.5, 35.5), (58.5, 35.5)), ((54, 78), (49.5, 72.5), (58.5, 72.5)),
-                ((30, 54), (35.5, 49.5), (35.5, 58.5)), ((78, 54), (72.5, 49.5), (72.5, 58.5))):
-        d.polygon([p(*v) for v in tri], fill=BLUE)
-    cx, cy = p(54, 54)
-    cr = 7.5 * 0.78 * k
-    d.ellipse((cx - cr, cy - cr, cx + cr, cy + cr), fill=ORANGE)
+    def r(v):
+        return v * 0.82 * k
+
+    for x0, y0, x1, y1 in ((41, 32, 59, 84), (24, 49, 76, 67)):
+        d.rounded_rectangle((*p(x0, y0), *p(x1, y1)), radius=r(3), fill=WHITE)
+    cx, cy = p(50, 58)
+    d.ellipse((cx - r(5.5), cy - r(5.5), cx + r(5.5), cy + r(5.5)), fill=ORANGE)
+    ax, ay = p(62, 46)
+    w = r(5.5)
+    for radius in (9, 17):
+        rad = r(radius)
+        d.arc((ax - rad - w / 2, ay - rad - w / 2, ax + rad + w / 2, ay + rad + w / 2), 280, 350, fill=WHITE, width=round(w))
+        for deg in (280, 350):  # round caps
+            ex, ey = ax + rad * math.cos(math.radians(deg)), ay + rad * math.sin(math.radians(deg))
+            d.ellipse((ex - w / 2, ey - w / 2, ex + w / 2, ey + w / 2), fill=WHITE)
     return im
 
 
