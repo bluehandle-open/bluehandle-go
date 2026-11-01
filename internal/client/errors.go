@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"syscall"
+
+	"github.com/bluehandle-open/bluehandle-go/internal/bluetooth"
 )
 
 // ErrorKind groups connection errors by what the user should check.
@@ -17,6 +19,7 @@ const (
 	ErrKindTimeout     ErrorKind = "timeout"      // no answer: other network or blocked
 	ErrKindUnreachable ErrorKind = "unreachable"  // no route to the phone
 	ErrKindBadAddress  ErrorKind = "bad_address"  // address cannot be parsed or resolved
+	ErrKindNoBluetooth ErrorKind = "no_bluetooth" // this computer's Bluetooth is missing or off
 	ErrKindPhoneClosed ErrorKind = "phone_closed" // phone disconnected on purpose
 	ErrKindLost        ErrorKind = "lost"         // established link dropped
 	ErrKindCanceled    ErrorKind = "canceled"
@@ -34,13 +37,20 @@ func Classify(err error) ErrorKind {
 	if errors.Is(err, context.Canceled) {
 		return ErrKindCanceled
 	}
+	if errors.Is(err, bluetooth.ErrNoRadio) || errors.Is(err, bluetooth.ErrUnsupported) {
+		return ErrKindNoBluetooth
+	}
 	var errno syscall.Errno
 	if errors.As(err, &errno) {
 		switch errno {
-		case errRefused:
+		case errRefused, errServiceMissing, errNoService:
 			return ErrKindRefused
-		case errNetUnreach, errHostUnreach:
+		case errNetUnreach, errHostUnreach, errHostDown:
 			return ErrKindUnreachable
+		case errNetDown:
+			return ErrKindNoBluetooth
+		case errTimedOut:
+			return ErrKindTimeout
 		}
 	}
 	var addrErr *net.AddrError

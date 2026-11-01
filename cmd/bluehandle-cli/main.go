@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/bluehandle-open/bluehandle-go/internal/bluetooth"
 	"github.com/bluehandle-open/bluehandle-go/internal/client"
 	"github.com/bluehandle-open/bluehandle-go/internal/input"
 	"github.com/bluehandle-open/bluehandle-go/internal/keymap"
@@ -22,12 +23,27 @@ func (logEvents) OnState(s client.State, detail string) { log.Printf("state: %s 
 func (logEvents) OnError(err error)                     { log.Printf("error: %v", err) }
 
 func main() {
-	ip := flag.String("ip", "", "phone IP address (required)")
+	ip := flag.String("ip", "", "phone IP address, or bt:AA:BB:CC:DD:EE:FF for Bluetooth (required)")
+	listBT := flag.Bool("list-bt", false, "list the Bluetooth devices paired with this computer and exit")
 	keys := flag.String("keys", "", "key table to push after connecting: handle, ppt or player")
 	dryRun := flag.Bool("dry-run", false, "print received input instead of typing it")
 	flag.Parse()
+	if *listBT {
+		devices, err := bluetooth.Paired()
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, d := range devices {
+			kind := ""
+			if d.Phone {
+				kind = " (phone)"
+			}
+			fmt.Printf("%s  %s%s\n", d.Addr, d.Name, kind)
+		}
+		return
+	}
 	if *ip == "" {
-		fmt.Fprintln(os.Stderr, "usage: bluehandle-cli -ip <phone ip> [-keys handle|ppt|player] [-dry-run]")
+		fmt.Fprintln(os.Stderr, "usage: bluehandle-cli -ip <phone ip | bt:AA:BB:CC:DD:EE:FF> [-keys handle|ppt|player] [-dry-run]\n       bluehandle-cli -list-bt")
 		os.Exit(2)
 	}
 	var keySet byte

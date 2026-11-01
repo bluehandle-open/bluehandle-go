@@ -2,10 +2,12 @@ import { Events, Window } from "@wailsio/runtime";
 import { Service, type AppInfo, type Settings } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/gui";
 import type { Activity, Stats, Status } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/session";
 import type { Recent } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/config";
+import type { Device } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/bluetooth";
 
 // ---------------------------------------------------------------- state
 
 type View = "main" | "settings";
+type Transport = "wifi" | "bt";
 
 let view: View = "main";
 let status: Status = { state: "disconnected", addr: "", paused: false, connected_at: "", retrying: false, error: "", detail: "" };
@@ -16,6 +18,12 @@ let settings: Settings | null = null;
 let info: AppInfo = { version: "", elevated: false, elevation_needed: false };
 let localIP = "";
 let draftAddr = "";
+let transport: Transport = "wifi";
+/** Bluetooth devices paired with this PC; null until first loaded */
+let devices: Device[] | null = null;
+/** Why the paired list could not be read, e.g. Bluetooth is off */
+let btUnavailable = "";
+let loadingDevices = false;
 let focusAddr = true;
 /** IDs of text entries the user expanded to read in full */
 const expanded = new Set<number>();
@@ -53,12 +61,21 @@ const icon = {
   pauseBig: `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`,
   play: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>`,
   alert: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>`,
+  bt: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>`,
   infoI: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>`,
 };
 
 /** host drops the default port for display. */
 function host(addr: string): string {
   return addr.endsWith(DEFAULT_PORT) ? addr.slice(0, -DEFAULT_PORT.length) : addr;
+}
+
+const isBT = (addr: string) => addr.toLowerCase().startsWith("bt:");
+
+/** label shows a paired phone's name instead of its Bluetooth address. */
+function label(addr: string): string {
+  if (!isBT(addr)) return host(addr);
+  return devices?.find((d) => d.addr === addr)?.name || addr.slice(3);
 }
 
 function clock(iso: string): string {
@@ -102,12 +119,20 @@ const errors: Record<string, { title: string; tips?: string[] }> = {
   other: { title: "连接失败" },
 };
 
+const btErrors: Record<string, { title: string; tips?: string[] }> = {
+  refused: { title: "手机没有在等待蓝牙连接", tips: ["手机上是否已选「蓝牙」并点「开始连接」", "手机是否已和这台电脑配对"] },
+  timeout: { title: "连接超时", tips: ["手机的蓝牙是否打开", "手机是否在电脑附近（10 米以内）"] },
+  unreachable: { title: "找不到这台手机", tips: ["手机的蓝牙是否打开", "手机是否在电脑附近"] },
+  no_bluetooth: { title: "电脑的蓝牙不可用", tips: ["在 Windows 设置里打开蓝牙"] },
+  lost: { title: "与手机的蓝牙连接中断了", tips: ["手机可能离电脑太远，或关闭了蓝牙"] },
+};
+
 function errorBanner(): HTMLElement | null {
   if (!status.error || status.state === "connected") return null;
   if (status.error === "phone_closed") {
     return h("div", { class: "banner info", role: "status" }, h("span", { html: icon.infoI }), h("div", {}, "手机已断开连接"));
   }
-  const e = errors[status.error] ?? errors.other;
+  const e = (isBT(status.addr) ? btErrors[status.error] : undefined) ?? errors[status.error] ?? errors.other;
   return h("div", { class: "banner err", role: "alert" },
     h("span", { html: icon.alert }),
     h("div", {},
@@ -132,6 +157,27 @@ async function connect(addr: string) {
   }
   recent = (await Service.Recent()) ?? [];
   render();
+}
+
+async function loadDevices() {
+  loadingDevices = true;
+  render();
+  try {
+    devices = (await Service.PairedDevices()) ?? [];
+    btUnavailable = "";
+  } catch {
+    devices = [];
+    btUnavailable = "电脑的蓝牙没有打开，或者这台电脑没有蓝牙。";
+  }
+  loadingDevices = false;
+  render();
+}
+
+function setTransport(t: Transport) {
+  transport = t;
+  focusAddr = t === "wifi";
+  if (t === "bt" && devices === null) loadDevices();
+  else render();
 }
 
 async function refreshRecent() {
@@ -162,7 +208,7 @@ function render() {
   const list = document.querySelector(".log .list");
   if (list) list.scrollTop = scroll;
   if (keepFocus) document.getElementById(keepFocus)?.focus();
-  else if (focusAddr && view === "main" && status.state !== "connected") document.getElementById("addr")?.focus();
+  else if (focusAddr && view === "main" && transport === "wifi" && status.state !== "connected") document.getElementById("addr")?.focus();
   focusAddr = false;
 }
 
@@ -183,10 +229,15 @@ function connectView(): Node[] {
 
   const statusLine = busy
     ? h("span", { class: "status", role: "status" }, h("span", { class: "dot wait pulse" }),
-        status.retrying ? `正在等待手机 ${host(status.addr)}，每 3 秒重试` : `正在连接 ${host(status.addr)}…（最长 12 秒）`)
+        status.retrying ? `正在等待手机 ${label(status.addr)}，每 3 秒重试`
+          : `正在连接 ${label(status.addr)}…（最长 ${isBT(status.addr) ? 20 : 12} 秒）`)
     : h("span", { class: "status" }, h("span", { class: "dot" }), "未连接");
 
-  const card = h("div", { class: "card stack" },
+  const tabs = h("div", { class: "seg", role: "tablist", "aria-label": "连接方式" },
+    ...([["wifi", "Wi‑Fi"], ["bt", "蓝牙"]] as const).map(([k, text]) =>
+      h("button", { role: "tab", class: transport === k ? "on" : "", "aria-selected": String(transport === k), disabled: busy, onclick: () => setTransport(k) }, text)));
+
+  const card = transport === "bt" ? btCard(busy, statusLine) : h("div", { class: "card stack" },
     statusLine,
     h("label", { class: "caption", for: "addr" }, "手机地址（手机首页「本机地址」显示的 IP）"),
     h("div", { class: "input" }, input, settings && settings.port !== 8088 ? h("span", { class: "suffix" }, `:${settings.port}`) : h("span", { class: "suffix" }, DEFAULT_PORT)),
@@ -200,21 +251,53 @@ function connectView(): Node[] {
   const list = recent.length > 0 && h("div", { class: "card", style: "padding:10px 14px" },
     h("div", { class: "caption", style: "margin:4px 0 4px 4px" }, "最近连接"),
     h("div", {}, ...recent.map((r) => h("div", { class: "item" },
-      h("div", { class: "avatar", html: icon.phone(18) }),
+      h("div", { class: "avatar", html: isBT(r.addr) ? icon.bt : icon.phone(18) }),
       h("div", { class: "grow" },
-        h("div", { class: "name" }, host(r.addr)),
+        h("div", { class: "name" }, label(r.addr)),
         h("div", { class: "sub" }, when(r.last_at) + (r.duration_seconds > 0 ? ` · 连接了 ${duration(r.duration_seconds)}` : ""))),
-      h("button", { class: "forget", "aria-label": `删除 ${host(r.addr)}`, title: "从列表删除", onclick: async () => { await Service.ForgetRecent(r.addr); refreshRecent(); } }, "✕"),
+      h("button", { class: "forget", "aria-label": `删除 ${label(r.addr)}`, title: "从列表删除", onclick: async () => { await Service.ForgetRecent(r.addr); refreshRecent(); } }, "✕"),
       h("button", { class: "btn ghost xs", disabled: busy, onclick: () => connect(r.addr) }, "连接"),
     ))));
 
   return [
     header("连接手机"),
+    tabs,
     card,
     list || null,
     h("div", { class: "grow" }),
-    h("div", { class: "caption center" }, localIP ? `本机 ${localIP} · 需与手机在同一 Wi‑Fi` : "本机没有连接局域网"),
+    h("div", { class: "caption center" }, transport === "bt" ? "蓝牙连接不需要 Wi‑Fi，手机需在电脑附近"
+      : localIP ? `本机 ${localIP} · 需与手机在同一 Wi‑Fi` : "本机没有连接局域网"),
   ].filter(Boolean) as Node[];
+}
+
+/** The Bluetooth tab: pick a paired phone instead of typing an address. */
+function btCard(busy: boolean, statusLine: Node): HTMLElement {
+  let list: Node | null;
+  if (devices === null || loadingDevices) list = h("div", { class: "empty" }, "正在读取已配对的设备…");
+  else if (btUnavailable) list = null;
+  else if (devices.length === 0) list = h("div", { class: "empty" }, "还没有和这台电脑配对的设备");
+  else list = h("div", {}, ...devices.map((d) => h("div", { class: "item" },
+    h("div", { class: "avatar", html: d.phone ? icon.phone(18) : icon.bt }),
+    h("div", { class: "grow" },
+      h("div", { class: "name" }, d.name || d.addr.slice(3)),
+      h("div", { class: "sub" }, (d.phone ? "手机 · " : "") + d.addr.slice(3))),
+    h("button", { class: "btn ghost xs", disabled: busy, onclick: () => connect(d.addr) }, "连接"))));
+
+  const unavailable = btUnavailable && !status.error
+    ? h("div", { class: "banner err", role: "alert" }, h("span", { html: icon.alert }), h("div", {}, btUnavailable))
+    : null;
+
+  return h("div", { class: "card stack" },
+    statusLine,
+    h("div", { class: "row" },
+      h("span", { class: "caption grow" }, "已和电脑配对的设备"),
+      h("button", { class: "linkbtn", disabled: loadingDevices || busy, onclick: loadDevices }, "刷新")),
+    list,
+    errorBanner() ?? unavailable,
+    busy
+      ? h("button", { class: "btn ghost", onclick: () => Service.Cancel() }, "取消")
+      : h("div", { class: "caption" }, "先在手机上打开蓝色手柄，选「蓝牙」并点「开始连接」，再点这里手机后面的「连接」。列表里没有手机？先在电脑的蓝牙设置里和它配对。"),
+    !busy && h("button", { class: "btn ghost sm", onclick: () => Service.OpenBluetoothSettings() }, "打开电脑蓝牙设置"));
 }
 
 function connectedView(): Node[] {
@@ -228,7 +311,7 @@ function connectedView(): Node[] {
       paused
         ? h("span", { class: "status", style: "color:var(--action)" }, h("span", { class: "dot wait" }), "已暂停接收")
         : h("span", { class: "status", style: "color:#7DD3AC" }, h("span", { class: "dot ok" }), "已连接"),
-      h("div", { class: "addr" }, host(status.addr)),
+      h("div", { class: "addr" }, label(status.addr)),
       h("div", { class: "sub", id: "elapsed" }, paused ? "连接保持中，手机上的操作不会生效" : `已连接 ${duration(elapsed)}`)));
 
   const card = h("div", { class: "card" },
@@ -406,9 +489,13 @@ async function init() {
     Service.Status(), Service.Stats(), Service.Activities().then((a) => a ?? []),
     Service.Recent().then((r) => r ?? []), Service.Settings(), Service.Info(), Service.LocalIP(),
   ]);
-  draftAddr = host(await Service.LastAddr());
-  focusAddr = true;
+  const last = await Service.LastAddr();
+  if (isBT(last)) transport = "bt";
+  else draftAddr = host(last);
+  focusAddr = transport === "wifi";
   render();
+  // names for Bluetooth entries in the recent list, and the list for the tab
+  if (transport === "bt" || recent.some((r) => isBT(r.addr))) loadDevices();
 }
 
 init();

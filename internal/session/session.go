@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bluehandle-open/bluehandle-go/internal/bluetooth"
 	"github.com/bluehandle-open/bluehandle-go/internal/client"
 	"github.com/bluehandle-open/bluehandle-go/internal/config"
 	"github.com/bluehandle-open/bluehandle-go/internal/input"
@@ -164,8 +165,12 @@ func (s *Session) Stats() Stats {
 }
 
 // HostPort adds the configured port to addr unless it already has one.
+// Bluetooth addresses are normalised and have no port.
 func (s *Session) HostPort(addr string) string {
 	addr = strings.TrimSpace(addr)
+	if v, err := bluetooth.ParseAddr(addr); err == nil {
+		return bluetooth.FormatAddr(v)
+	}
 	if _, _, err := net.SplitHostPort(addr); err == nil {
 		return addr
 	}

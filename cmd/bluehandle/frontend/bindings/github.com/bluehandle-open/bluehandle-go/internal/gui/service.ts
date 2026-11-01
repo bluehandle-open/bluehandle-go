@@ -12,6 +12,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as bluetooth$0 from "../bluetooth/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as config$0 from "../config/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -92,6 +95,21 @@ export function LocalIP(): $CancellablePromise<string> {
  */
 export function Now(): $CancellablePromise<string> {
     return $Call.ByID(3815880454);
+}
+
+/**
+ * OpenBluetoothSettings shows the system page for pairing the phone.
+ */
+export function OpenBluetoothSettings(): $CancellablePromise<void> {
+    return $Call.ByID(638775189);
+}
+
+/**
+ * PairedDevices lists the Bluetooth devices paired with this computer,
+ * phones first. An error means Bluetooth is unavailable here.
+ */
+export function PairedDevices(): $CancellablePromise<bluetooth$0.Device[] | null> {
+    return $Call.ByID(2627077242);
 }
 
 /**

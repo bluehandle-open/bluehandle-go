@@ -6,6 +6,7 @@ package gui
 import (
 	"time"
 
+	"github.com/bluehandle-open/bluehandle-go/internal/bluetooth"
 	"github.com/bluehandle-open/bluehandle-go/internal/config"
 	"github.com/bluehandle-open/bluehandle-go/internal/platform"
 	"github.com/bluehandle-open/bluehandle-go/internal/session"
@@ -79,6 +80,13 @@ func (v *Service) Disconnect() error { return v.s.Disconnect() }
 
 // SetPaused stops or resumes replaying the phone's input.
 func (v *Service) SetPaused(p bool) error { return v.s.SetPaused(p) }
+
+// PairedDevices lists the Bluetooth devices paired with this computer,
+// phones first. An error means Bluetooth is unavailable here.
+func (v *Service) PairedDevices() ([]bluetooth.Device, error) { return bluetooth.Paired() }
+
+// OpenBluetoothSettings shows the system page for pairing the phone.
+func (v *Service) OpenBluetoothSettings() error { return platform.OpenBluetoothSettings() }
 
 // Recent lists recently used phones, newest first.
 func (v *Service) Recent() []config.Recent { return v.s.Config().Recent }
