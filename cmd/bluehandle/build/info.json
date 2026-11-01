@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.2.0"
+	},
+	"info": {
+		"0409": {
+			"ProductVersion": "0.2.0",
+			"CompanyName": "bluehandle-open",
+			"FileDescription": "蓝色手柄电脑端",
+			"LegalCopyright": "MIT License",
+			"ProductName": "蓝色手柄",
+			"Comments": "https://github.com/bluehandle-open/bluehandle-go"
+		}
+	}
+}

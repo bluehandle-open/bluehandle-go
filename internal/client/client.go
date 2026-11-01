@@ -1,6 +1,6 @@
-// Package client manages the TCP connection to the phone. It merges
-// WifiSocket.java and ClientThread.java into one implementation and drops
-// the Bluetooth transport.
+// Package client manages the connection to the phone, over TCP (Wi-Fi) or
+// RFCOMM (Bluetooth). It merges WifiSocket.java, BluetoothSocket.java and
+// ClientThread.java into one implementation.
 package client
 
 import (
@@ -9,10 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/bluehandle-open/bluehandle-go/internal/bluetooth"
 	"github.com/bluehandle-open/bluehandle-go/internal/consts"
 	"github.com/bluehandle-open/bluehandle-go/internal/input"
 	"github.com/bluehandle-open/bluehandle-go/internal/keymap"
@@ -29,8 +32,13 @@ const (
 	// DefaultReadTimeout is how long we wait for any frame before declaring
 	// the phone gone. The phone sends a heartbeat every second over Wi-Fi.
 	DefaultReadTimeout = 5 * time.Second
-	dialTimeout        = 5 * time.Second
-	writeTimeout       = 3 * time.Second
+	// dialTimeout covers two SYN retransmissions (Windows resends after 3 s
+	// and 9 s). A phone whose Wi-Fi is dozing often drops the first SYN.
+	dialTimeout = 12 * time.Second
+	// btDialTimeout leaves room for paging the phone and the SDP lookup.
+	btDialTimeout    = 20 * time.Second
+	handshakeTimeout = 10 * time.Second
+	writeTimeout     = 3 * time.Second
 )
 
 // Client is safe for concurrent use. One Client handles one connection at a
@@ -46,6 +54,10 @@ type Client struct {
 	conn  net.Conn
 	state State
 	done  chan struct{}
+	cause error // why the last connection ended; nil after Close
+
+	paused    atomic.Bool
+	lastFrame atomic.Int64 // UnixNano of the last frame received
 }
 
 // New returns a client that replays key events on kb and reports to ev.
@@ -58,9 +70,10 @@ func New(kb input.Keyboard, ev Events) *Client {
 	return &Client{kb: kb, ev: ev, ReadTimeout: DefaultReadTimeout, done: done}
 }
 
-// Connect dials the phone. addr is an IP or host; a port may be appended,
-// otherwise consts.Port is used. It returns once the TCP connection is up
-// and starts the read loop in the background.
+// Connect dials the phone. addr is an IP or host, with an optional port
+// (consts.Port otherwise), or a Bluetooth address "bt:AA:BB:CC:DD:EE:FF".
+// It returns once the connection is up and starts the read loop in the
+// background.
 func (c *Client) Connect(ctx context.Context, addr string) error {
 	c.mu.Lock()
 	if c.state != Disconnected {
@@ -71,11 +84,7 @@ func (c *Client) Connect(ctx context.Context, addr string) error {
 	c.mu.Unlock()
 	c.ev.OnState(Connecting, addr)
 
-	if _, _, err := net.SplitHostPort(addr); err != nil {
-		addr = net.JoinHostPort(addr, strconv.Itoa(consts.Port))
-	}
-	d := net.Dialer{Timeout: dialTimeout}
-	conn, err := d.DialContext(ctx, "tcp", addr)
+	conn, r, err := dial(ctx, addr)
 	if err != nil {
 		c.mu.Lock()
 		c.state = Disconnected
@@ -86,12 +95,81 @@ func (c *Client) Connect(ctx context.Context, addr string) error {
 
 	done := make(chan struct{})
 	c.mu.Lock()
-	c.conn, c.state, c.done = conn, Connected, done
+	c.conn, c.state, c.done, c.cause = conn, Connected, done, nil
 	c.mu.Unlock()
+	c.lastFrame.Store(time.Now().UnixNano())
 	c.ev.OnState(Connected, conn.RemoteAddr().String())
-	go c.readLoop(conn, done)
+	go c.readLoop(conn, r, done)
 	return nil
 }
+
+// dial opens the transport. Over Bluetooth the phone first sends a
+// handshake line, which is consumed here so a wrong service fails early.
+func dial(ctx context.Context, addr string) (net.Conn, *bufio.Reader, error) {
+	if !bluetooth.IsAddr(addr) {
+		if _, _, err := net.SplitHostPort(addr); err != nil {
+			addr = net.JoinHostPort(addr, strconv.Itoa(consts.Port))
+		}
+		d := net.Dialer{Timeout: dialTimeout}
+		conn, err := d.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		return conn, bufio.NewReader(conn), nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, btDialTimeout)
+	defer cancel()
+	conn, err := bluetooth.Dial(ctx, addr)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			err = os.ErrDeadlineExceeded
+		}
+		var op *net.OpError
+		if !errors.As(err, &op) {
+			err = &net.OpError{Op: "dial", Net: "bluetooth", Err: err}
+		}
+		return nil, nil, err
+	}
+	r := bufio.NewReader(conn)
+	_ = conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+	if err := protocol.ReadHandshake(r); err != nil {
+		conn.Close()
+		return nil, nil, &net.OpError{Op: "dial", Net: "bluetooth", Err: err}
+	}
+	return conn, r, nil
+}
+
+// Cause reports why the most recent connection ended: ErrPhoneClosed when
+// the phone said goodbye, a read error when the link was lost, or nil when
+// the connection was closed with Close or is still up.
+func (c *Client) Cause() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cause
+}
+
+// LastFrameAt is when the last frame (including heartbeats) arrived on the
+// current or most recent connection.
+func (c *Client) LastFrameAt() time.Time {
+	return time.Unix(0, c.lastFrame.Load())
+}
+
+// SetPaused stops (or resumes) replaying the phone's input. The connection
+// stays up and observers still see every input. Pausing lifts any key that
+// is still held so nothing stays stuck down.
+func (c *Client) SetPaused(p bool) error {
+	if c.paused.Swap(p) == p || !p {
+		return nil
+	}
+	if r, ok := c.kb.(input.Releaser); ok {
+		return r.ReleaseAll()
+	}
+	return nil
+}
+
+// Paused reports whether input replay is paused.
+func (c *Client) Paused() bool { return c.paused.Load() }
 
 // State reports the current connection state.
 func (c *Client) State() State {
@@ -146,6 +224,7 @@ func (c *Client) Close() error {
 	}
 	c.conn = nil
 	c.state = Disconnected
+	c.cause = nil
 	c.mu.Unlock()
 
 	frame, _ := protocol.EncodeToPhone(protocol.NewFinish())
@@ -156,7 +235,7 @@ func (c *Client) Close() error {
 	return errors.Join(werr, cerr)
 }
 
-func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
+func (c *Client) readLoop(conn net.Conn, r *bufio.Reader, done chan struct{}) {
 	defer close(done)
 	if r, ok := c.kb.(input.Releaser); ok {
 		defer func() {
@@ -165,7 +244,6 @@ func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
 			}
 		}()
 	}
-	r := bufio.NewReader(conn)
 	for {
 		if c.ReadTimeout > 0 {
 			_ = conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
@@ -175,6 +253,7 @@ func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
 			c.teardown(conn, err)
 			return
 		}
+		c.lastFrame.Store(time.Now().UnixNano())
 		switch m.Type {
 		case consts.TypeKey:
 			ev, err := protocol.ParseKeyEvent(m)
@@ -182,22 +261,16 @@ func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
 				c.ev.OnError(err)
 				continue
 			}
-			if err := input.Apply(c.kb, ev); err != nil {
-				c.ev.OnError(err)
-			}
+			c.handle(Input{Kind: InputKey, Key: ev}, func() error { return input.Apply(c.kb, ev) })
 		case consts.TypeText:
 			ev, err := protocol.ParseText(m)
 			if err != nil {
 				c.ev.OnError(err)
 				continue
 			}
-			if err := input.ApplyText(c.kb, ev); err != nil {
-				c.ev.OnError(err)
-			}
+			c.handle(Input{Kind: InputText, Text: ev}, func() error { return input.ApplyText(c.kb, ev) })
 		case consts.TypeLockScreen:
-			if err := c.kb.LockScreen(); err != nil {
-				c.ev.OnError(err)
-			}
+			c.handle(Input{Kind: InputLock}, c.kb.LockScreen)
 		case consts.TypeFinish:
 			c.teardown(conn, ErrPhoneClosed)
 			return
@@ -212,6 +285,19 @@ func (c *Client) readLoop(conn net.Conn, done chan struct{}) {
 	}
 }
 
+// handle replays one input unless paused, then tells the observer.
+func (c *Client) handle(in Input, apply func() error) {
+	applied := !c.paused.Load()
+	if applied {
+		if err := apply(); err != nil {
+			c.ev.OnError(err)
+		}
+	}
+	if o, ok := c.ev.(InputObserver); ok {
+		o.OnInput(in, applied)
+	}
+}
+
 // teardown handles a connection ending from the read side. If Close already
 // detached conn it does nothing, so the UI sees exactly one Disconnected.
 func (c *Client) teardown(conn net.Conn, cause error) {
@@ -222,6 +308,7 @@ func (c *Client) teardown(conn net.Conn, cause error) {
 	}
 	c.conn = nil
 	c.state = Disconnected
+	c.cause = cause
 	c.mu.Unlock()
 	_ = conn.Close()
 	detail := ""

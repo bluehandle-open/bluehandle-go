@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>蓝色手柄电脑端 · 设计稿</title>
+<style>
+:root {
+  --bg: #0B1220; --card: #141D2E; --card2: #101827; --line: #27334D;
+  --text: #E8EDF7; --muted: #9AA6BD; --primary: #2F6FEB; --primary-text: #8AB8FF;
+  --action: #F5A524; --ok: #3FB27F; --danger: #F0616D;
+  --font: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #E9ECF2; font-family: var(--font); color: #141A26; }
+header { padding: 32px 40px 4px; }
+header h1 { margin: 0 0 6px; font-size: 26px; }
+header p { margin: 4px 0; color: #4A5468; font-size: 14px; line-height: 1.6; max-width: 980px; }
+.canvas { display: flex; flex-wrap: wrap; gap: 44px; padding: 28px 40px 64px; align-items: flex-start; }
+.board { display: flex; flex-direction: column; gap: 10px; }
+.label { font-size: 14px; font-weight: 700; display: flex; gap: 10px; align-items: baseline; }
+.label span { font-weight: 400; color: #4A5468; font-size: 12px; }
+.note { max-width: 420px; font-size: 12px; color: #4A5468; line-height: 1.6; }
+
+/* 窗口 */
+.win { width: 420px; height: 640px; background: var(--bg); color: var(--text); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 16px 48px rgba(20,26,38,.3); display: flex; flex-direction: column; font-family: var(--font); border: 1px solid #1d2638; }
+.titlebar { height: 36px; display: flex; align-items: center; padding-left: 14px; gap: 8px; font-size: 12px; color: var(--muted); -webkit-user-select: none; user-select: none; }
+.titlebar .logo { width: 18px; height: 18px; border-radius: 5px; background: var(--primary); display: flex; align-items: center; justify-content: center; }
+.titlebar .grow { flex: 1; }
+.titlebar .wbtn { width: 46px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.titlebar .wbtn.close:hover { background: #C42B1C; color: #fff; }
+.body { flex: 1; padding: 6px 20px 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.row { display: flex; align-items: center; gap: 10px; }
+.h1 { font-size: 20px; font-weight: 700; }
+.iconbtn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.caption { font-size: 12px; color: var(--muted); }
+.status { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #5B6680; }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(63,178,127,.18); }
+.dot.wait { background: var(--action); }
+.input { display: flex; align-items: center; height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--card2); padding: 0 14px; gap: 8px; font-size: 16px; }
+.input.focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(47,111,235,.25); }
+.input .ph { color: #5B6680; }
+.input .port { margin-left: auto; color: var(--muted); font-size: 14px; }
+.btn { height: 48px; border-radius: 12px; border: none; font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; width: 100%; font-family: inherit; }
+.btn.primary { background: var(--primary); color: #fff; }
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.btn.warn { background: rgba(245,165,36,.14); color: var(--action); border: 1px solid rgba(245,165,36,.4); }
+.btn.sm { height: 36px; font-size: 13px; font-weight: 500; border-radius: 10px; }
+.list { display: flex; flex-direction: column; }
+.item { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-top: 1px solid #1d2638; }
+.item:first-child { border-top: none; }
+.avatar { width: 36px; height: 36px; border-radius: 10px; background: #1A2540; color: var(--primary-text); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.grow { flex: 1; min-width: 0; }
+.name { font-size: 14px; }
+.sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.chev { color: #5B6680; }
+.banner { border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.6; display: flex; gap: 10px; }
+.banner.err { background: rgba(240,97,109,.1); border: 1px solid rgba(240,97,109,.35); color: #F7B3B9; }
+.banner.info { background: rgba(47,111,235,.1); border: 1px solid rgba(47,111,235,.35); color: var(--primary-text); }
+.banner ol { margin: 4px 0 0; padding-left: 18px; color: #C9D2E3; }
+.hero { display: flex; align-items: center; gap: 14px; }
+.hero .phone { width: 52px; height: 52px; border-radius: 14px; background: rgba(63,178,127,.14); color: var(--ok); display: flex; align-items: center; justify-content: center; }
+.stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
+.stat { background: var(--card2); border-radius: 10px; padding: 10px; }
+.stat b { display: block; font-size: 18px; }
+.log { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.log .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ev { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; border-top: 1px solid #1d2638; }
+.ev:first-child { border-top: none; }
+.ev time { color: #5B6680; font-variant-numeric: tabular-nums; font-size: 12px; width: 58px; flex-shrink: 0; }
+.tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; flex-shrink: 0; }
+.tag.key { background: #1A2540; color: var(--primary-text); }
+.tag.txt { background: rgba(63,178,127,.14); color: #7DD3AC; }
+.tag.sys { background: rgba(245,165,36,.14); color: var(--action); }
+.kbd { font-family: Consolas, monospace; font-size: 12px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--card2); }
+.sw { width: 40px; height: 22px; border-radius: 11px; background: #2A3550; position: relative; flex-shrink: 0; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #9AA6BD; }
+.sw.on { background: var(--primary); }
+.sw.on::after { left: 21px; background: #fff; }
+.section { font-size: 12px; color: var(--muted); margin: 6px 4px -6px; }
+.set { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid #1d2638; font-size: 14px; }
+.set:first-child { border-top: none; padding-top: 2px; }
+.set .val { color: var(--muted); font-size: 13px; }
+.paused { background: rgba(245,165,36,.1); border: 1px solid rgba(245,165,36,.35); color: var(--action); }
+
+/* 托盘菜单 */
+.tray-wrap { width: 300px; height: 330px; border-radius: 10px; background: linear-gradient(160deg, #3d5a80, #22324d); position: relative; overflow: hidden; box-shadow: 0 16px 48px rgba(20,26,38,.3); }
+.taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: rgba(20,24,34,.92); display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 12px; color: #cfd6e4; font-size: 11px; }
+.trayicon { width: 22px; height: 22px; border-radius: 6px; background: var(--primary); display: flex; align-items: center; justify-content: center; position: relative; }
+.trayicon i { position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); border: 2px solid #141822; }
+.menu { position: absolute; right: 16px; bottom: 50px; width: 230px; background: #1B2232; border: 1px solid #2E3850; border-radius: 10px; padding: 6px; color: var(--text); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+.menu .mi { padding: 9px 12px; border-radius: 6px; display: flex; justify-content: space-between; }
+.menu .mi:hover, .menu .mi.hl { background: #263049; }
+.menu .sep { height: 1px; background: #2E3850; margin: 4px 6px; }
+.menu .st { padding: 8px 12px 6px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+<h1>蓝色手柄电脑端 · Wails 界面设计稿</h1>
+<p>延续手机端的深色控制台风格（底 #0B1220、卡片 #141D2E、主色 #2F6FEB、动作橙 #F5A524）。窗口固定 420×640，自绘标题栏；关闭窗口默认缩到系统托盘，连接在后台保持。</p>
+<p>连接方向不变：手机先点「开始连接」等待，电脑填手机地址后主动连接。局域网自动发现（路线图第 5 阶段）做好之前，靠「最近连接」免去重复输入 IP。</p>
+</header>
+<main class="canvas">
+
+<!-- ============ 1 未连接 ============ -->
+<section class="board">
+<div class="label">① 未连接<span>420 × 640</span></div>
+<div class="win">
+  <div class="titlebar"><div class="logo"><svg width="18" height="18" viewBox="18 18 72 72" aria-hidden="true"><g transform="matrix(0.82 0 0 0.82 11.36 8.08)"><path fill="#fff" d="M44 32h12a3 3 0 0 1 3 3v14h14a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3H59v14a3 3 0 0 1 -3 3H44a3 3 0 0 1 -3 -3V67H27a3 3 0 0 1 -3 -3V52a3 3 0 0 1 3 -3h14V35a3 3 0 0 1 3 -3z"/><circle cx="50" cy="58" r="5.5" fill="#F5A524"/><path d="M63.6 37.1A9 9 0 0 1 70.9 44.4 M64.95 29.26A17 17 0 0 1 78.74 43.05" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></g></svg></div>蓝色手柄<div class="grow"></div><div class="wbtn">—</div><div class="wbtn close">✕</div></div>
+  <div class="body">
+    <div class="row"><div class="h1">连接手机</div><div class="grow"></div>
+      <div class="iconbtn" title="设置"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <span class="status"><span class="dot"></span>未连接</span>
+      <div class="caption">手机地址（手机首页「本机地址」显示的 IP）</div>
+      <div class="input focus"><span>192.168.6.</span><span style="border-left:2px solid var(--primary-text);height:20px"></span><span class="port">:8088</span></div>
+      <button class="btn primary"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>连接</button>
+      <div class="caption" style="line-height:1.6">先在手机上打开蓝色手柄，选 Wi‑Fi 并点「开始连接」，再点这里的「连接」。</div>
+    </div>
+    <div class="card" style="padding:10px 14px">
+      <div class="caption" style="margin:4px 0 4px 4px">最近连接</div>
+      <div class="list">
+        <div class="item"><div class="avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div><div class="grow"><div class="name">192.168.6.144</div><div class="sub">今天 09:37 · 连接了 42 分钟</div></div><button class="btn ghost sm" style="width:64px">连接</button></div>
+        <div class="item"><div class="avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div><div class="grow"><div class="name">192.168.6.243</div><div class="sub">昨天 22:55</div></div><button class="btn ghost sm" style="width:64px">连接</button></div>
+      </div>
+    </div>
+    <div class="grow"></div>
+    <div class="caption" style="text-align:center">本机 192.168.6.226 · 需与手机在同一 Wi‑Fi</div>
+  </div>
+</div>
+<div class="note">打开时自动填入上次的地址并聚焦输入框，回车即连接。地址框只填 IP，端口默认 8088（设置里可改）。最近连接最多 5 条，右键可删除。</div>
+</section>
+
+<!-- ============ 2 连接中 / 失败 ============ -->
+<section class="board">
+<div class="label">② 连接失败<span>420 × 640</span></div>
+<div class="win">
+  <div class="titlebar"><div class="logo"><svg width="18" height="18" viewBox="18 18 72 72" aria-hidden="true"><g transform="matrix(0.82 0 0 0.82 11.36 8.08)"><path fill="#fff" d="M44 32h12a3 3 0 0 1 3 3v14h14a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3H59v14a3 3 0 0 1 -3 3H44a3 3 0 0 1 -3 -3V67H27a3 3 0 0 1 -3 -3V52a3 3 0 0 1 3 -3h14V35a3 3 0 0 1 3 -3z"/><circle cx="50" cy="58" r="5.5" fill="#F5A524"/><path d="M63.6 37.1A9 9 0 0 1 70.9 44.4 M64.95 29.26A17 17 0 0 1 78.74 43.05" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></g></svg></div>蓝色手柄<div class="grow"></div><div class="wbtn">—</div><div class="wbtn close">✕</div></div>
+  <div class="body">
+    <div class="row"><div class="h1">连接手机</div><div class="grow"></div><div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/></svg></div></div>
+    <div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <span class="status"><span class="dot"></span>未连接</span>
+      <div class="input"><span>192.168.6.144</span><span class="port">:8088</span></div>
+      <div class="banner err"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <div><b>手机拒绝了连接</b>
+          <ol><li>手机上是否已点「开始连接」并显示“等待电脑接入”</li><li>手机与电脑是否连着同一个 Wi‑Fi</li><li>手机设置里的端口是否也是 8088</li></ol></div></div>
+      <button class="btn primary">重试</button>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <span class="status"><span class="dot wait"></span>正在连接 192.168.6.144…</span>
+      <button class="btn ghost">取消</button>
+      <div class="caption">上面是失败状态，这一块是连接中状态（最长等 5 秒）</div>
+    </div>
+    <div class="grow"></div>
+  </div>
+</div>
+<div class="note">错误按原因给出不同提示：被拒绝（手机没在等待）、超时（不在同一网络或被防火墙拦截）、地址格式错误。首次运行时 Windows 防火墙可能弹窗，需要允许专用网络。</div>
+</section>
+
+<!-- ============ 3 已连接 ============ -->
+<section class="board">
+<div class="label">③ 已连接<span>420 × 640</span></div>
+<div class="win">
+  <div class="titlebar"><div class="logo"><svg width="18" height="18" viewBox="18 18 72 72" aria-hidden="true"><g transform="matrix(0.82 0 0 0.82 11.36 8.08)"><path fill="#fff" d="M44 32h12a3 3 0 0 1 3 3v14h14a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3H59v14a3 3 0 0 1 -3 3H44a3 3 0 0 1 -3 -3V67H27a3 3 0 0 1 -3 -3V52a3 3 0 0 1 3 -3h14V35a3 3 0 0 1 3 -3z"/><circle cx="50" cy="58" r="5.5" fill="#F5A524"/><path d="M63.6 37.1A9 9 0 0 1 70.9 44.4 M64.95 29.26A17 17 0 0 1 78.74 43.05" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></g></svg></div>蓝色手柄<div class="grow"></div><div class="wbtn">—</div><div class="wbtn close">✕</div></div>
+  <div class="body">
+    <div class="card">
+      <div class="hero"><div class="phone"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div>
+        <div class="grow"><span class="status" style="color:#7DD3AC"><span class="dot ok"></span>已连接</span><div style="font-size:18px;font-weight:700;margin-top:4px">192.168.6.144</div><div class="sub">已连接 12 分 08 秒</div></div></div>
+      <div class="stats"><div class="stat"><b>326</b><span class="caption">按键</span></div><div class="stat"><b>4</b><span class="caption">段文字</span></div><div class="stat"><b>1s</b><span class="caption">心跳正常</span></div></div>
+      <div class="row" style="margin-top:14px;gap:8px">
+        <button class="btn warn sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>暂停接收</button>
+        <button class="btn ghost sm">断开</button>
+      </div>
+    </div>
+    <div class="card log">
+      <div class="head"><span class="caption">最近收到</span><span class="caption">清空</span></div>
+      <div class="ev"><time>09:49:21</time><span class="tag txt">文字</span><span class="grow" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">你好 bluehandle 123</span><span class="kbd">↵</span></div>
+      <div class="ev"><time>09:49:05</time><span class="tag key">按键</span><span class="kbd">PgDn</span></div>
+      <div class="ev"><time>09:49:04</time><span class="tag key">按键</span><span class="kbd">PgDn</span></div>
+      <div class="ev"><time>09:48:50</time><span class="tag key">组合</span><span class="kbd">Win</span>+<span class="kbd">D</span></div>
+      <div class="ev"><time>09:48:47</time><span class="tag key">按键</span><span class="kbd">音量+</span></div>
+      <div class="ev"><time>09:48:40</time><span class="tag sys">锁屏</span><span class="grow">已锁定电脑</span></div>
+      <div class="ev"><time>09:48:12</time><span class="tag key">按住</span><span class="kbd">W</span><span class="caption">1.4 秒</span></div>
+      <div class="ev"><time>09:48:10</time><span class="tag key">按键</span><span class="kbd">J</span></div>
+    </div>
+  </div>
+</div>
+<div class="note">「暂停接收」用于临时不想被手机控制（例如开会投屏时），连接保持，收到的输入直接丢弃并在日志里标灰。文字内容默认显示，可在设置里改为只显示“文字 · 18 字”。日志只保留在内存里最近 200 条。</div>
+</section>
+
+<!-- ============ 4 暂停中 ============ -->
+<section class="board">
+<div class="label">④ 已连接 · 暂停接收<span>420 × 640</span></div>
+<div class="win">
+  <div class="titlebar"><div class="logo"><svg width="18" height="18" viewBox="18 18 72 72" aria-hidden="true"><g transform="matrix(0.82 0 0 0.82 11.36 8.08)"><path fill="#fff" d="M44 32h12a3 3 0 0 1 3 3v14h14a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3H59v14a3 3 0 0 1 -3 3H44a3 3 0 0 1 -3 -3V67H27a3 3 0 0 1 -3 -3V52a3 3 0 0 1 3 -3h14V35a3 3 0 0 1 3 -3z"/><circle cx="50" cy="58" r="5.5" fill="#F5A524"/><path d="M63.6 37.1A9 9 0 0 1 70.9 44.4 M64.95 29.26A17 17 0 0 1 78.74 43.05" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></g></svg></div>蓝色手柄<div class="grow"></div><div class="wbtn">—</div><div class="wbtn close">✕</div></div>
+  <div class="body">
+    <div class="card">
+      <div class="hero"><div class="phone" style="background:rgba(245,165,36,.14);color:var(--action)"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div>
+        <div class="grow"><span class="status" style="color:var(--action)"><span class="dot wait"></span>已暂停接收</span><div style="font-size:18px;font-weight:700;margin-top:4px">192.168.6.144</div><div class="sub">连接保持中，手机上的操作不会生效</div></div></div>
+      <div class="row" style="margin-top:14px;gap:8px">
+        <button class="btn primary sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>继续接收</button>
+        <button class="btn ghost sm">断开</button>
+      </div>
+    </div>
+    <div class="card log">
+      <div class="head"><span class="caption">最近收到</span><span class="caption">清空</span></div>
+      <div class="ev" style="opacity:.45"><time>09:52:03</time><span class="tag key">按键</span><span class="kbd">PgDn</span><span class="caption">已忽略</span></div>
+      <div class="ev" style="opacity:.45"><time>09:52:01</time><span class="tag key">按键</span><span class="kbd">PgDn</span><span class="caption">已忽略</span></div>
+      <div class="ev"><time>09:51:40</time><span class="tag sys">暂停</span><span class="grow">在电脑上暂停接收</span></div>
+      <div class="ev"><time>09:49:21</time><span class="tag txt">文字</span><span class="grow" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">你好 bluehandle 123</span><span class="kbd">↵</span></div>
+    </div>
+  </div>
+</div>
+<div class="note">暂停时托盘图标右下角的小点变橙色。暂停前仍按着的键会先全部松开。</div>
+</section>
+
+<!-- ============ 5 设置 ============ -->
+<section class="board">
+<div class="label">⑤ 设置<span>420 × 640</span></div>
+<div class="win">
+  <div class="titlebar"><div class="logo"><svg width="18" height="18" viewBox="18 18 72 72" aria-hidden="true"><g transform="matrix(0.82 0 0 0.82 11.36 8.08)"><path fill="#fff" d="M44 32h12a3 3 0 0 1 3 3v14h14a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3H59v14a3 3 0 0 1 -3 3H44a3 3 0 0 1 -3 -3V67H27a3 3 0 0 1 -3 -3V52a3 3 0 0 1 3 -3h14V35a3 3 0 0 1 3 -3z"/><circle cx="50" cy="58" r="5.5" fill="#F5A524"/><path d="M63.6 37.1A9 9 0 0 1 70.9 44.4 M64.95 29.26A17 17 0 0 1 78.74 43.05" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/></g></svg></div>蓝色手柄<div class="grow"></div><div class="wbtn">—</div><div class="wbtn close">✕</div></div>
+  <div class="body" style="gap:12px">
+    <div class="row"><div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></div><div class="h1">设置</div></div>
+    <div class="section">连接</div>
+    <div class="card" style="padding:6px 16px">
+      <div class="set"><span class="grow">端口</span><span class="val">8088</span></div>
+      <div class="set"><span class="grow">启动时自动连接上次的手机<div class="sub">手机未在等待时每 3 秒重试</div></span><span class="sw on"></span></div>
+      <div class="set"><span class="grow">意外断开后自动重连</span><span class="sw on"></span></div>
+    </div>
+    <div class="section">窗口</div>
+    <div class="card" style="padding:6px 16px">
+      <div class="set"><span class="grow">开机自动启动</span><span class="sw"></span></div>
+      <div class="set"><span class="grow">关闭窗口时缩到托盘</span><span class="sw on"></span></div>
+      <div class="set"><span class="grow">最近收到里显示文字内容<div class="sub">关闭后只显示字数</div></span><span class="sw on"></span></div>
+    </div>
+    <div class="banner info"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><div>要控制以管理员身份运行的程序（部分游戏、任务管理器），蓝色手柄也需要以管理员身份运行。<span style="text-decoration:underline">以管理员身份重启</span></div></div>
+    <div class="grow"></div>
+    <div class="caption" style="text-align:center">版本 0.2.0 · 协议说明 · 下载手机端 · 开源许可</div>
+  </div>
+</div>
+<div class="note">设置保存在 %AppData%\bluehandle\config.json。手机端已不再接收电脑推送的按键表，所以 Java 版的「按键设置」不再保留；键位在手机上配置。</div>
+</section>
+
+<!-- ============ 6 托盘 ============ -->
+<section class="board">
+<div class="label">⑥ 托盘菜单<span>右键托盘图标</span></div>
+<div class="tray-wrap">
+  <div class="menu">
+    <div class="st"><span class="status" style="color:#7DD3AC"><span class="dot ok"></span>已连接 192.168.6.144</span></div>
+    <div class="sep"></div>
+    <div class="mi hl"><span>打开主窗口</span></div>
+    <div class="mi"><span>暂停接收</span><span class="caption">Ctrl+Alt+P</span></div>
+    <div class="mi"><span>断开</span></div>
+    <div class="sep"></div>
+    <div class="mi"><span>设置</span></div>
+    <div class="mi"><span>退出</span></div>
+  </div>
+  <div class="taskbar"><span>中</span><div class="trayicon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><rect x="2" y="7" width="20" height="11" rx="5.5"/><path d="M7 11v3M5.5 12.5h3"/></svg><i></i></div><span>09:52</span></div>
+</div>
+<div class="note">托盘图标右下角小点：绿色已连接、橙色暂停、无点未连接。左键单击打开主窗口。连接、断开时弹系统通知（可在设置关闭）。全局快捷键 Ctrl+Alt+P 切换暂停。</div>
+</section>
+
+</main>
+</body>
+</html>
