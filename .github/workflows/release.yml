@@ -1,0 +1,45 @@
+name: release
+
+# Push a tag such as v1.0.0 to build the Windows binaries and publish a
+# GitHub Release. The phone app's download page links to releases/latest.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/bluehandle/frontend/package-lock.json
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Build frontend
+        working-directory: cmd/bluehandle/frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Build binaries
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          go build -tags production -trimpath -ldflags "-s -w -H windowsgui -X main.version=${version}" -o dist/bluehandle.exe ./cmd/bluehandle
+          go build -trimpath -ldflags "-s -w" -o dist/bluehandle-cli.exe ./cmd/bluehandle-cli
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/bluehandle.exe dist/bluehandle-cli.exe \
+            --title "蓝色手柄电脑端 $GITHUB_REF_NAME" --generate-notes
