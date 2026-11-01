@@ -30,8 +30,10 @@ const (
 	// DefaultReadTimeout is how long we wait for any frame before declaring
 	// the phone gone. The phone sends a heartbeat every second over Wi-Fi.
 	DefaultReadTimeout = 5 * time.Second
-	dialTimeout        = 5 * time.Second
-	writeTimeout       = 3 * time.Second
+	// dialTimeout covers two SYN retransmissions (Windows resends after 3 s
+	// and 9 s). A phone whose Wi-Fi is dozing often drops the first SYN.
+	dialTimeout  = 12 * time.Second
+	writeTimeout = 3 * time.Second
 )
 
 // Client is safe for concurrent use. One Client handles one connection at a

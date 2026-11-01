@@ -1,8 +1,8 @@
 """Draw the app icon and the three tray icons.
 
 Run from anywhere: python -I make_icons.py <output dir>
-Needs Pillow. The shapes follow the phone app's logo: a gamepad outline on
-a blue rounded square; tray icons add a status dot in the corner.
+Needs Pillow. The shapes follow the phone app's logo: a D-pad on a blue
+rounded square; tray icons add a status dot in the corner.
 """
 import sys
 from pathlib import Path
@@ -18,24 +18,26 @@ S = 512  # draw large, then downsample
 
 
 def logo() -> Image.Image:
+    """The phone app's launcher icon: a white D-pad with an orange centre key."""
     im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, S - 1, S - 1), radius=S * 0.22, fill=BLUE)
-    w = S * 0.055
-    # gamepad body: viewBox x 2..22, y 7..18 scaled into the middle of the tile
-    k = S / 24 * 0.78
-    ox, oy = (S - 24 * k) / 2, (S - 24 * k) / 2
+    k = S / 72  # the phone icon's visible 72 units of its 108-unit canvas
 
     def p(x, y):
-        return ox + x * k, oy + y * k
+        x = 54 + (x - 54) * 0.78
+        y = 54 + (y - 54) * 0.78
+        return (x - 18) * k, (y - 18) * k
 
-    d.rounded_rectangle((*p(2, 7), *p(22, 18)), radius=5.5 * k, outline=WHITE, width=round(w))
-    d.line((*p(7, 10.6), *p(7, 14.4)), fill=WHITE, width=round(w))
-    d.line((*p(5.1, 12.5), *p(8.9, 12.5)), fill=WHITE, width=round(w))
-    for cx, cy in ((16, 11.5), (18, 13.5)):
-        r = 1.15 * k
-        x, y = p(cx, cy)
-        d.ellipse((x - r, y - r, x + r, y + r), fill=WHITE)
+    r = 5 * 0.78 * k
+    d.rounded_rectangle((*p(42, 24), *p(66, 84)), radius=r, fill=WHITE)
+    d.rounded_rectangle((*p(24, 42), *p(84, 66)), radius=r, fill=WHITE)
+    for tri in (((54, 30), (49.5, 35.5), (58.5, 35.5)), ((54, 78), (49.5, 72.5), (58.5, 72.5)),
+                ((30, 54), (35.5, 49.5), (35.5, 58.5)), ((78, 54), (72.5, 49.5), (72.5, 58.5))):
+        d.polygon([p(*v) for v in tri], fill=BLUE)
+    cx, cy = p(54, 54)
+    cr = 7.5 * 0.78 * k
+    d.ellipse((cx - cr, cy - cr, cx + cr, cy + cr), fill=ORANGE)
     return im
 
 

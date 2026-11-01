@@ -90,9 +90,16 @@ input { font-family: inherit; }
 .ev.dropped { opacity: .45; }
 .ev time { color: var(--faint); font-variant-numeric: tabular-nums; font-size: 12px; width: 58px; flex-shrink: 0; }
 .ev .txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; }
+.ev.expandable { cursor: pointer; border-radius: 8px; }
+.ev.expandable:hover { background: #172034; }
+.ev .chev { color: var(--faint); display: flex; flex-shrink: 0; transition: transform .15s; }
+.ev.open { align-items: flex-start; }
+.ev.open .txt { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.ev.open .chev { transform: rotate(180deg); }
+.ev.open time, .ev.open .tag, .ev.open .kbd { margin-top: 1px; }
 .tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; flex-shrink: 0; }
 .tag.key { background: #1A2540; color: var(--primary-text); }
-.tag.txt { background: rgba(63,178,127,.14); color: #7DD3AC; }
+.tag.text { background: rgba(63,178,127,.14); color: #7DD3AC; }
 .tag.sys { background: rgba(245,165,36,.14); color: var(--action); }
 .kbd { font-family: Consolas, monospace; font-size: 12px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--card2); white-space: nowrap; }
 .empty { color: var(--faint); font-size: 13px; text-align: center; padding: 24px 0; }

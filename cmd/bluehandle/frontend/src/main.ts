@@ -17,6 +17,10 @@ let info: AppInfo = { version: "", elevated: false, elevation_needed: false };
 let localIP = "";
 let draftAddr = "";
 let focusAddr = true;
+/** IDs of text entries the user expanded to read in full */
+const expanded = new Set<number>();
+/** Text longer than this is likely cut off in one line and gets a toggle. */
+const EXPAND_CHARS = 16;
 
 const app = document.getElementById("app")!;
 const DEFAULT_PORT = ":8088";
@@ -41,6 +45,7 @@ function h(tag: string, attrs: Record<string, unknown> = {}, ...children: Child[
 
 const icon = {
   settings: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`,
+  chevron: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`,
   back: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>`,
   power: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>`,
   phone: (size: number) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>`,
@@ -152,7 +157,10 @@ async function saveSettings(patch: Partial<Settings>) {
 function render() {
   const active = document.activeElement as HTMLElement | null;
   const keepFocus = active?.id;
+  const scroll = document.querySelector(".log .list")?.scrollTop ?? 0;
   app.replaceChildren(...(view === "settings" ? settingsView() : status.state === "connected" ? connectedView() : connectView()));
+  const list = document.querySelector(".log .list");
+  if (list) list.scrollTop = scroll;
   if (keepFocus) document.getElementById(keepFocus)?.focus();
   else if (focusAddr && view === "main" && status.state !== "connected") document.getElementById("addr")?.focus();
   focusAddr = false;
@@ -175,7 +183,7 @@ function connectView(): Node[] {
 
   const statusLine = busy
     ? h("span", { class: "status", role: "status" }, h("span", { class: "dot wait pulse" }),
-        status.retrying ? `正在等待手机 ${host(status.addr)}，每 3 秒重试` : `正在连接 ${host(status.addr)}…`)
+        status.retrying ? `正在等待手机 ${host(status.addr)}，每 3 秒重试` : `正在连接 ${host(status.addr)}…（最长 12 秒）`)
     : h("span", { class: "status" }, h("span", { class: "dot" }), "未连接");
 
   const card = h("div", { class: "card stack" },
@@ -268,9 +276,10 @@ function activityRow(a: Activity): HTMLElement {
       body = [h("span", { class: "tag key" }, "按住"), ...keys(a.keys), h("span", { class: "caption" }, `${((a.hold_ms ?? 0) / 1000).toFixed(1)} 秒`)];
       break;
     case "text":
-      body = [h("span", { class: "tag txt" }, "文字"),
+      body = [h("span", { class: "tag text" }, "文字"),
         h("span", { class: "txt" }, a.text ? a.text : a.chars ? `${a.chars} 个字` : "（只按回车）"),
         a.enter ? h("span", { class: "kbd" }, "↵") : null].filter(Boolean) as Node[];
+      if (a.text && (a.chars ?? 0) > EXPAND_CHARS) return expandableRow(a, t, body);
       break;
     case "lock":
       body = [h("span", { class: "tag sys" }, "锁屏"), h("span", { class: "txt" }, "锁定电脑")];
@@ -286,6 +295,24 @@ function activityRow(a: Activity): HTMLElement {
   }
   if (!a.applied) body.push(h("span", { class: "caption" }, "已忽略"));
   return h("div", { class: a.applied ? "ev" : "ev dropped" }, t, ...body);
+}
+
+/** A text entry that opens to show the whole text; click again to fold. */
+function expandableRow(a: Activity, t: Node, body: Node[]): HTMLElement {
+  const open = expanded.has(a.id);
+  const flip = () => {
+    if (window.getSelection()?.toString()) return; // the user is selecting text to copy
+    if (open) expanded.delete(a.id);
+    else expanded.add(a.id);
+    render();
+  };
+  return h("div", {
+    class: `ev expandable${open ? " open" : ""}${a.applied ? "" : " dropped"}`,
+    role: "button", tabindex: "0", "aria-expanded": String(open),
+    title: open ? "点击收起" : "点击展开全文",
+    onclick: flip,
+    onkeydown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } },
+  }, t, ...body, h("span", { class: "chev", html: icon.chevron }));
 }
 
 function toggle(id: string, label: string, sub: string | null, checked: boolean, key: keyof Settings): HTMLElement {
