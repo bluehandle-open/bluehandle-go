@@ -1,7 +1,8 @@
 name: release
 
 # Push a tag such as v1.0.0 to build the Windows binaries and publish a
-# GitHub Release. The phone app's download page links to releases/latest.
+# GitHub Release, then publish the binaries to the Cloudflare Pages download
+# site (pages.yml). The phone app's download page links to releases/latest.
 on:
   push:
     tags: ["v*"]
@@ -43,3 +44,11 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/bluehandle.exe dist/bluehandle-cli.exe \
             --title "蓝色手柄电脑端 $GITHUB_REF_NAME" --generate-notes
+
+  # Refresh the Cloudflare Pages download site with the new binaries.
+  pages:
+    needs: release
+    uses: ./.github/workflows/pages.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
