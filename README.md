@@ -42,6 +42,17 @@ bin/bluehandle -ip 192.168.1.5 -keys handle
 
 目前只有 Windows 能真正模拟输入，用系统的 `SendInput`，不需要 cgo；其他平台自动退回打印模式。Windows 不允许普通程序向管理员权限的窗口发送输入，要控制以管理员身份运行的程序，bluehandle 也需要以管理员身份运行。
 
+## 发布
+
+推送 `v*` tag 后，`release.yml` 会编译 `bluehandle.exe` 和 `bluehandle-cli.exe` 并发布 GitHub Release，接着调用 `pages.yml`，把 `site/` 下的下载页连同这两个文件部署到 Cloudflare Pages（默认项目名 `bluehandle-pc`，即 `bluehandle-pc.pages.dev`）。下载地址固定为 `/download/bluehandle.exe`，版本信息在 `/download/latest.json`。
+
+首次使用前在仓库设置里添加：
+
+- Secrets：`CLOUDFLARE_API_TOKEN`（权限 Account › Cloudflare Pages › Edit）、`CLOUDFLARE_ACCOUNT_ID`
+- 可选变量：`CF_PAGES_PROJECT`，改用别的 Pages 项目名
+
+Pages 项目不存在时会自动创建（直接上传类型）。也可以在 Actions 里手动运行 `pages` 重新部署最新版或指定 tag；本地预览可运行 `bash site/build.sh`，输出在 `public/`。
+
 ## 路线图
 
 1. **协议层与命令行版**（已完成）：`protocol`、`keymap`、`client` 及其测试，命令行连上手机打印按键。

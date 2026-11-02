@@ -1,0 +1,7 @@
+# Cloudflare Pages response headers.
+# The binaries keep stable URLs across releases, so make browsers revalidate.
+/download/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/download/latest.json
+  Access-Control-Allow-Origin: *

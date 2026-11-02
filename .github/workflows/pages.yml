@@ -1,0 +1,49 @@
+name: pages
+
+# Publish the download site (site/) with a release's binaries to Cloudflare
+# Pages. release.yml calls this after creating a release; run it by hand to
+# redeploy the latest (or a given) release.
+#
+# Needs repository secrets CLOUDFLARE_API_TOKEN (Account > Cloudflare Pages >
+# Edit) and CLOUDFLARE_ACCOUNT_ID. The Pages project name defaults to
+# bluehandle-pc; override it with the repository variable CF_PAGES_PROJECT.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, e.g. v1.0.0 (empty = latest)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT: ${{ vars.CF_PAGES_PROJECT || 'bluehandle-pc' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: bash site/build.sh "$TAG"
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Creating the project is a no-op error once it exists.
+          preCommands: npx wrangler pages project create "$PROJECT" --production-branch=main || true
+          command: pages deploy public --project-name=${{ env.PROJECT }} --branch=main --commit-dirty=true
