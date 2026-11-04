@@ -44,7 +44,7 @@ bin/bluehandle -ip 192.168.1.5 -keys handle
 
 ## 发布
 
-推送 `v*` tag 后，`release.yml` 会编译 `bluehandle.exe` 和 `bluehandle-cli.exe` 并发布 GitHub Release，接着调用 `pages.yml`，把 `site/` 下的下载页连同这两个文件部署到 Cloudflare Pages（默认项目名 `bluehandle-pc`，即 `bluehandle-pc.pages.dev`）。下载地址固定为 `/download/bluehandle.exe`，版本信息在 `/download/latest.json`。
+推送 `v*` tag 后，`release.yml` 会编译 `bluehandle.exe` 和 `bluehandle-cli.exe` 并发布 GitHub Release，接着调用 `pages.yml`，把 `site/` 下的下载页连同这两个文件部署到 Cloudflare Pages（默认项目名 `bluehandle-go`，即 `bluehandle-go.pages.dev`）。下载地址固定为 `/download/bluehandle.exe`，版本信息在 `/download/latest.json`。
 
 首次使用前在仓库设置里添加：
 

@@ -6,7 +6,7 @@ name: pages
 #
 # Needs repository secrets CLOUDFLARE_API_TOKEN (Account > Cloudflare Pages >
 # Edit) and CLOUDFLARE_ACCOUNT_ID. The Pages project name defaults to
-# bluehandle-pc; override it with the repository variable CF_PAGES_PROJECT.
+# bluehandle-go; override it with the repository variable CF_PAGES_PROJECT.
 on:
   workflow_call:
     inputs:
@@ -31,7 +31,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      PROJECT: ${{ vars.CF_PAGES_PROJECT || 'bluehandle-pc' }}
+      PROJECT: ${{ vars.CF_PAGES_PROJECT || 'bluehandle-go' }}
     steps:
       - uses: actions/checkout@v4
       - name: Build site

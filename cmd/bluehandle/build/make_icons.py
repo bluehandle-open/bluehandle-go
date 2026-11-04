@@ -1,10 +1,9 @@
 """Draw the app icon and the three tray icons.
 
 Run from anywhere: python -I make_icons.py <output dir>
-Needs Pillow. The shapes follow the phone app's logo: a D-pad with signal
-arcs on a flat blue rounded square; tray icons add a status dot in the corner.
+Needs Pillow. The shapes follow the phone app's logo: an FC-style capsule
+gamepad in white strokes on a flat blue rounded square; tray icons add a status dot in the corner.
 """
-import math
 import sys
 from pathlib import Path
 
@@ -19,32 +18,33 @@ S = 512  # draw large, then downsample
 
 
 def logo() -> Image.Image:
-    """The phone app's launcher icon: a white D-pad with an orange centre and
-    two signal arcs in its top-right corner. Geometry matches the phone repo's
-    design/logo.py (108-unit canvas, scaled 0.82 and offset by (11.36, 8.08))."""
+    """The phone app's launcher icon: an FC-style capsule gamepad in white
+    strokes, a cross on the left and two buttons on the right (the right one
+    orange). Geometry matches the phone repo's design/logo.py (108-unit canvas,
+    of which the visible 18..90 maps onto this square)."""
     im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, S - 1, S - 1), radius=S * 0.22, fill=BLUE)
-    k = S / 72  # the phone icon's visible 72 units of its 108-unit canvas
+    k = S / 72
+
+    z = 0.8  # shrink about the centre for margin, as design/logo.py RASTER_SCALE
 
     def p(x, y):
-        return (x * 0.82 + 11.36 - 18) * k, (y * 0.82 + 8.08 - 18) * k
+        return (54 + (x - 54) * z - 18) * k, (54 + (y - 54) * z - 18) * k
 
-    def r(v):
-        return v * 0.82 * k
-
-    for x0, y0, x1, y1 in ((41, 32, 59, 84), (24, 49, 76, 67)):
-        d.rounded_rectangle((*p(x0, y0), *p(x1, y1)), radius=r(3), fill=WHITE)
-    cx, cy = p(50, 58)
-    d.ellipse((cx - r(5.5), cy - r(5.5), cx + r(5.5), cy + r(5.5)), fill=ORANGE)
-    ax, ay = p(62, 46)
-    w = r(5.5)
-    for radius in (9, 17):
-        rad = r(radius)
-        d.arc((ax - rad - w / 2, ay - rad - w / 2, ax + rad + w / 2, ay + rad + w / 2), 280, 350, fill=WHITE, width=round(w))
-        for deg in (280, 350):  # round caps
-            ex, ey = ax + rad * math.cos(math.radians(deg)), ay + rad * math.sin(math.radians(deg))
+    w = 5 * k * z  # stroke width
+    (x0, y0), (x1, y1) = p(22, 39), p(86, 69)  # capsule stroke centre line
+    d.rounded_rectangle((x0 - w / 2, y0 - w / 2, x1 + w / 2, y1 + w / 2),
+                        radius=(y1 - y0 + w) / 2, outline=WHITE, width=round(w))
+    for a, b in (((31.5, 54), (44.5, 54)), ((38, 47.5), (38, 60.5))):  # cross
+        d.line((*p(*a), *p(*b)), fill=WHITE, width=round(w))
+        for e in (a, b):  # round caps
+            ex, ey = p(*e)
             d.ellipse((ex - w / 2, ey - w / 2, ex + w / 2, ey + w / 2), fill=WHITE)
+    r = 3.8 * k * z
+    for (x, y), colour in (((64, 54), WHITE), ((74, 54), ORANGE)):
+        cx, cy = p(x, y)
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=colour)
     return im
 
 
