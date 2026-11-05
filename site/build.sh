@@ -24,7 +24,7 @@ date="${published%%T*}"
 
 rm -rf "$out"
 mkdir -p "$out/download"
-cp "$root/site/index.html" "$root/site/logo.svg" "$root/site/_headers" "$out/"
+cp "$root/site/index.html" "$root/site/privacy.html" "$root/site/logo.svg" "$root/site/_headers" "$out/"
 gh release download "$tag" -R "$repo" -D "$out/download" \
   -p bluehandle.exe -p bluehandle-cli.exe
 

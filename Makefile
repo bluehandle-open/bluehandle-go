@@ -2,7 +2,7 @@ VERSION ?= dev
 GUI     := cmd/bluehandle
 WAILS   ?= wails3
 
-.PHONY: all test vet build cli gui frontend bindings syso clean
+.PHONY: all test vet build cli gui msix frontend bindings syso clean
 
 all: vet test build
 
@@ -21,6 +21,11 @@ cli:
 # Desktop app (Windows). Embeds the built frontend; no cgo needed.
 gui: frontend
 	go build -tags production -trimpath -ldflags "-s -w -H windowsgui -X main.version=$(VERSION)" -o bin/bluehandle.exe ./$(GUI)
+
+# Unsigned MSIX for the Microsoft Store (Windows SDK needed). VERSION must be
+# numeric, e.g. make msix VERSION=1.0.1.
+msix: gui
+	pwsh -NoProfile -File $(GUI)/build/msix/pack.ps1 -Version $(VERSION) -Exe bin/bluehandle.exe -Out dist/bluehandle-$(VERSION)-x64.msix
 
 frontend:
 	cd $(GUI)/frontend && npm ci && npm run build

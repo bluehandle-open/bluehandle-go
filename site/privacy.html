@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>隐私政策 · 蓝色手柄电脑端</title>
+<meta name="description" content="蓝色手柄电脑端的隐私政策：不收集、不上传任何个人数据。">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #F4F6FA; --surface: #FFFFFF; --border: #DCE2EC;
+  --text: #141A26; --muted: #5B6680; --primary-text: #1F5BD6;
+  --shadow: 0 18px 50px rgba(20, 26, 38, .14);
+  --font: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0B1220; --surface: #141D2E; --border: #27334D;
+    --text: #E8EDF7; --muted: #9AA6BD; --primary-text: #8AB8FF;
+    --shadow: 0 18px 50px rgba(0, 0, 0, .45);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+a { color: var(--primary-text); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto; }
+header { padding: 22px 0; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 18px; }
+.brand:hover { text-decoration: none; }
+.brand img { width: 32px; height: 32px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); padding: 40px; margin: 24px 0 32px; }
+h1 { margin: 0 0 4px; font-size: clamp(26px, 5vw, 34px); line-height: 1.3; }
+.meta { margin: 0 0 28px; color: var(--muted); }
+h2 { font-size: 19px; margin: 32px 0 8px; }
+ul { padding-left: 1.3em; margin: 0; }
+li { margin: 4px 0; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 40px 0 0; }
+footer { color: var(--muted); font-size: 14px; padding: 0 0 40px; }
+@media (max-width: 560px) { .card { padding: 26px 22px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap"><a class="brand" href="./"><img src="logo.svg" alt="">蓝色手柄</a></div>
+</header>
+<main class="wrap">
+<article class="card">
+  <h1>隐私政策</h1>
+  <p class="meta">适用于蓝色手柄电脑端（Windows）· 生效日期 2026-11-04</p>
+
+  <p>蓝色手柄电脑端不收集、不上传任何个人数据，也没有账号、广告或统计分析。</p>
+
+  <h2>程序如何联网</h2>
+  <p>程序只和你自己的手机通信：Wi‑Fi 方式下通过局域网连接你输入的手机地址，蓝牙方式下连接你在 Windows 中已配对并主动选中的手机。程序不会连接任何服务器。</p>
+
+  <h2>保存在本机的数据</h2>
+  <p>下列内容只保存在你的电脑上，位置是 <code>%AppData%\bluehandle\config.json</code>：</p>
+  <ul>
+    <li>程序设置，例如端口、是否自动连接、是否开机启动；</li>
+    <li>最近连接过的至多 5 台手机的地址（IP 地址或蓝牙地址）以及上次的连接时长。</li>
+  </ul>
+  <p>窗口中的活动日志只存在于内存中，程序退出后即消失。删除上述文件或卸载程序即可清除全部数据。</p>
+
+  <h2>收到的操作</h2>
+  <p>手机发来的按键、文字和锁屏请求会直接在本机执行，不会被记录到文件，也不会发送到别处。你可以在设置中关闭活动日志里的文字显示。</p>
+
+  <h2>权限</h2>
+  <p>程序需要在 Windows 中模拟键盘和鼠标输入。为了控制以管理员身份运行的程序，它可能提示以管理员身份重新启动，是否同意由你决定。</p>
+
+  <h2>儿童</h2>
+  <p>程序不收集任何人的个人信息，包括儿童。</p>
+
+  <h2>变更与联系</h2>
+  <p>本政策如有变更，会更新此页面并修改生效日期。有任何问题，请在 <a href="https://github.com/bluehandle-open/bluehandle-go/issues">GitHub Issues</a> 中联系我们。</p>
+
+  <hr>
+  <h2 lang="en">Privacy policy (English)</h2>
+  <div lang="en">
+    <p>BlueHandle for Windows does not collect, store remotely or share any personal data. It has no account, advertising or analytics, and never connects to a server.</p>
+    <p>It talks only to your own phone, over the local network at the address you enter, or over Bluetooth with a phone you have paired in Windows and selected. Settings and the addresses of up to five recently connected phones are kept only on this computer in <code>%AppData%\bluehandle\config.json</code>; delete that file or uninstall the app to remove them. Keys, text and lock requests received from the phone are carried out locally and are not recorded or transmitted.</p>
+    <p>Questions: <a href="https://github.com/bluehandle-open/bluehandle-go/issues">GitHub Issues</a>.</p>
+  </div>
+</article>
+</main>
+<footer>
+  <div class="wrap"><a href="./">下载页</a> · 开源协议 MIT</div>
+</footer>
+</body>
+</html>

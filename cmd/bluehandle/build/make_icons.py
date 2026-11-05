@@ -59,6 +59,17 @@ def with_dot(base: Image.Image, colour) -> Image.Image:
     return im
 
 
+def msix_assets(base: Image.Image, out: Path) -> None:
+    """Logos referenced by msix/AppxManifest.xml. Square ones are the plain
+    logo; the wide tile centres it on a transparent 310x150 canvas."""
+    out.mkdir(parents=True, exist_ok=True)
+    for name, size in (("StoreLogo", 50), ("Square44x44Logo", 44), ("Square150x150Logo", 150)):
+        base.resize((size, size), Image.LANCZOS).save(out / f"{name}.png")
+    wide = Image.new("RGBA", (310, 150), (0, 0, 0, 0))
+    wide.alpha_composite(base.resize((120, 120), Image.LANCZOS), (95, 15))
+    wide.save(out / "Wide310x150Logo.png")
+
+
 def main(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     base = logo()
@@ -66,6 +77,7 @@ def main(out: Path) -> None:
     base.save(out / "icon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     for name, im in (("tray_idle", base), ("tray_connected", with_dot(base, GREEN)), ("tray_paused", with_dot(base, ORANGE))):
         im.resize((32, 32), Image.LANCZOS).save(out / f"{name}.png")
+    msix_assets(base, out / "msix" / "Assets")
 
 
 if __name__ == "__main__":
