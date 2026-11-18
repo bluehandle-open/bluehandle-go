@@ -22,13 +22,14 @@ const (
 
 // Settings is the part of config.Config the settings page edits.
 type Settings struct {
-	Port          int  `json:"port"`
-	AutoConnect   bool `json:"auto_connect"`
-	AutoReconnect bool `json:"auto_reconnect"`
-	StartOnBoot   bool `json:"start_on_boot"`
-	CloseToTray   bool `json:"close_to_tray"`
-	ShowText      bool `json:"show_text"`
-	Notify        bool `json:"notify"`
+	Language      string `json:"language"`
+	Port          int    `json:"port"`
+	AutoConnect   bool   `json:"auto_connect"`
+	AutoReconnect bool   `json:"auto_reconnect"`
+	StartOnBoot   bool   `json:"start_on_boot"`
+	CloseToTray   bool   `json:"close_to_tray"`
+	ShowText      bool   `json:"show_text"`
+	Notify        bool   `json:"notify"`
 }
 
 // AppInfo is static information for the footer and the elevation banner.
@@ -42,6 +43,7 @@ type AppInfo struct {
 type Host interface {
 	SetStartOnBoot(on bool) error
 	RestartElevated() error
+	RefreshLanguage()
 }
 
 // Service is bound to the frontend; every exported method becomes a call.
@@ -113,7 +115,8 @@ func (v *Service) LocalIP() string {
 func (v *Service) Settings() Settings {
 	c := v.s.Config()
 	return Settings{
-		Port: c.Port, AutoConnect: c.AutoConnect, AutoReconnect: c.AutoReconnect,
+		Language: config.NormalizeLanguage(c.Language),
+		Port:     c.Port, AutoConnect: c.AutoConnect, AutoReconnect: c.AutoReconnect,
 		StartOnBoot: c.StartOnBoot, CloseToTray: c.CloseToTray, ShowText: c.ShowText, Notify: c.Notify,
 	}
 }
@@ -129,10 +132,15 @@ func (v *Service) SaveSettings(st Settings) error {
 			return err
 		}
 	}
-	return v.s.UpdateConfig(func(c *config.Config) {
+	err := v.s.UpdateConfig(func(c *config.Config) {
+		c.Language = config.NormalizeLanguage(st.Language)
 		c.Port, c.AutoConnect, c.AutoReconnect = st.Port, st.AutoConnect, st.AutoReconnect
 		c.StartOnBoot, c.CloseToTray, c.ShowText, c.Notify = st.StartOnBoot, st.CloseToTray, st.ShowText, st.Notify
 	})
+	if err == nil {
+		v.host.RefreshLanguage()
+	}
+	return err
 }
 
 // Info returns the version and elevation state.

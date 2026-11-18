@@ -23,9 +23,24 @@ type Recent struct {
 	Duration int64     `json:"duration_seconds"` // length of the last session
 }
 
+// Languages supported by the desktop app.
+const (
+	LanguageChinese = "zh-CN"
+	LanguageEnglish = "en"
+)
+
+// NormalizeLanguage falls back to Chinese for missing or unsupported preferences.
+func NormalizeLanguage(language string) string {
+	if language == LanguageEnglish {
+		return LanguageEnglish
+	}
+	return LanguageChinese
+}
+
 // Config is the whole settings file. Zero values are not meaningful; start
 // from Default and let Load fill in what the file has.
 type Config struct {
+	Language      string   `json:"language"`
 	Port          int      `json:"port"`
 	AutoConnect   bool     `json:"auto_connect"`   // reconnect to the last phone on start
 	AutoReconnect bool     `json:"auto_reconnect"` // retry after an unexpected drop
@@ -39,6 +54,7 @@ type Config struct {
 // Default returns the settings used before the user changes anything.
 func Default() Config {
 	return Config{
+		Language:      LanguageChinese,
 		Port:          consts.Port,
 		AutoConnect:   true,
 		AutoReconnect: true,
@@ -74,6 +90,7 @@ func Load(path string) (Config, error) {
 	if c.Port <= 0 || c.Port > 65535 {
 		c.Port = consts.Port
 	}
+	c.Language = NormalizeLanguage(c.Language)
 	if len(c.Recent) > MaxRecent {
 		c.Recent = c.Recent[:MaxRecent]
 	}

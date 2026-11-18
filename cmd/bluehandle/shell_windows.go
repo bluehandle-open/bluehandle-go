@@ -9,6 +9,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"github.com/bluehandle-open/bluehandle-go/internal/config"
 	"github.com/bluehandle-open/bluehandle-go/internal/gui"
 	"github.com/bluehandle-open/bluehandle-go/internal/platform"
 	"github.com/bluehandle-open/bluehandle-go/internal/session"
@@ -33,6 +34,8 @@ type shell struct {
 	tray                                       *application.SystemTray
 	menu                                       *application.Menu
 	miStatus, miPause, miConnect, miDisconnect *application.MenuItem
+	miOpen, miSettings, miQuit                 *application.MenuItem
+	trayMu                                     sync.Mutex
 
 	mu   sync.Mutex
 	last session.Status
@@ -47,7 +50,7 @@ func (sh *shell) OnStatus(st session.Status) {
 		return
 	}
 	sh.app.Event.Emit(gui.EventStatus, st)
-	sh.updateTray(st)
+	sh.RefreshLanguage()
 }
 
 // OnActivity implements session.Sink.
@@ -91,27 +94,28 @@ func (sh *shell) showWindow() {
 }
 
 func (sh *shell) setupTray() {
+	labels := labelsFor(sh.sess.Config().Language)
 	sh.menu = sh.app.NewMenu()
-	sh.miStatus = sh.menu.Add("未连接").SetEnabled(false)
+	sh.miStatus = sh.menu.Add(labels.disconnected).SetEnabled(false)
 	sh.menu.AddSeparator()
-	sh.menu.Add("打开主窗口").OnClick(func(*application.Context) { sh.showWindow() })
-	sh.miPause = sh.menu.Add("暂停接收").OnClick(func(*application.Context) {
+	sh.miOpen = sh.menu.Add(labels.open).OnClick(func(*application.Context) { sh.showWindow() })
+	sh.miPause = sh.menu.Add(labels.pause).OnClick(func(*application.Context) {
 		_ = sh.sess.SetPaused(!sh.sess.Status().Paused)
 	})
-	sh.miConnect = sh.menu.Add("连接上次的手机").OnClick(func(*application.Context) {
+	sh.miConnect = sh.menu.Add(labels.connect).OnClick(func(*application.Context) {
 		if addr := sh.sess.Config().LastAddr(); addr != "" {
 			go sh.sess.Connect(addr)
 		} else {
 			sh.showWindow()
 		}
 	})
-	sh.miDisconnect = sh.menu.Add("断开").OnClick(func(*application.Context) { _ = sh.sess.Disconnect() })
+	sh.miDisconnect = sh.menu.Add(labels.disconnect).OnClick(func(*application.Context) { _ = sh.sess.Disconnect() })
 	sh.menu.AddSeparator()
-	sh.menu.Add("设置").OnClick(func(*application.Context) {
+	sh.miSettings = sh.menu.Add(labels.settings).OnClick(func(*application.Context) {
 		sh.showWindow()
 		sh.app.Event.Emit(gui.EventNavigate, "settings")
 	})
-	sh.menu.Add("退出").OnClick(func(*application.Context) { sh.app.Quit() })
+	sh.miQuit = sh.menu.Add(labels.quit).OnClick(func(*application.Context) { sh.app.Quit() })
 
 	sh.tray = sh.app.SystemTray.New().SetIcon(trayIdle).SetMenu(sh.menu)
 	sh.tray.OnClick(func() {
@@ -121,34 +125,46 @@ func (sh *shell) setupTray() {
 			sh.showWindow()
 		}
 	})
-	sh.updateTray(sh.sess.Status())
+	sh.RefreshLanguage()
 }
 
-func (sh *shell) updateTray(st session.Status) {
+// RefreshLanguage updates native labels and connection state together.
+func (sh *shell) RefreshLanguage() {
+	sh.trayMu.Lock()
+	defer sh.trayMu.Unlock()
 	if sh.tray == nil {
 		return
 	}
+	st := sh.sess.Status()
+	cfg := sh.sess.Config()
+	labels := labelsFor(cfg.Language)
+	sh.window.SetTitle(labels.app)
+	sh.miOpen.SetLabel(labels.open)
+	sh.miConnect.SetLabel(labels.connect)
+	sh.miDisconnect.SetLabel(labels.disconnect)
+	sh.miSettings.SetLabel(labels.settings)
+	sh.miQuit.SetLabel(labels.quit)
 	connected := st.State == session.StateConnected
-	icon, label := trayIdle, "未连接"
+	icon, label := trayIdle, labels.disconnected
 	switch {
 	case connected && st.Paused:
-		icon, label = trayPaused, "已暂停 · "+host(st.Addr)
+		icon, label = trayPaused, labels.paused+" · "+host(st.Addr)
 	case connected:
-		icon, label = trayConnected, "已连接 · "+host(st.Addr)
+		icon, label = trayConnected, labels.connected+" · "+host(st.Addr)
 	case st.State == session.StateConnecting || st.Retrying:
-		label = "正在连接 " + host(st.Addr)
+		label = labels.connecting + " " + host(st.Addr)
 	}
 	sh.tray.SetIcon(icon)
-	sh.tray.SetTooltip("蓝色手柄 · " + label)
+	sh.tray.SetTooltip(labels.app + " · " + label)
 	sh.miStatus.SetLabel(label)
 	if st.Paused {
-		sh.miPause.SetLabel("继续接收")
+		sh.miPause.SetLabel(labels.resume)
 	} else {
-		sh.miPause.SetLabel("暂停接收")
+		sh.miPause.SetLabel(labels.pause)
 	}
 	sh.miPause.SetHidden(!connected)
 	sh.miDisconnect.SetHidden(!connected)
-	sh.miConnect.SetHidden(connected || sh.sess.Config().LastAddr() == "")
+	sh.miConnect.SetHidden(connected || cfg.LastAddr() == "")
 	sh.menu.Update()
 }
 
@@ -168,4 +184,42 @@ func (sh *shell) tickStats() {
 // host strips the default port for display.
 func host(addr string) string {
 	return strings.TrimSuffix(addr, ":8088")
+}
+
+type trayLabels struct {
+	app, disconnected, paused, connected, connecting         string
+	open, pause, resume, connect, disconnect, settings, quit string
+}
+
+func labelsFor(language string) trayLabels {
+	if language == config.LanguageEnglish {
+		return trayLabels{
+			app:          "BlueHandle",
+			disconnected: "Disconnected",
+			paused:       "Paused",
+			connected:    "Connected",
+			connecting:   "Connecting to",
+			open:         "Open main window",
+			pause:        "Pause input",
+			resume:       "Resume input",
+			connect:      "Connect to last phone",
+			disconnect:   "Disconnect",
+			settings:     "Settings",
+			quit:         "Quit",
+		}
+	}
+	return trayLabels{
+		app:          "蓝色手柄",
+		disconnected: "未连接",
+		paused:       "已暂停",
+		connected:    "已连接",
+		connecting:   "正在连接",
+		open:         "打开主窗口",
+		pause:        "暂停接收",
+		resume:       "继续接收",
+		connect:      "连接上次的手机",
+		disconnect:   "断开",
+		settings:     "设置",
+		quit:         "退出",
+	}
 }

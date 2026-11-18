@@ -61,7 +61,7 @@ func main() {
 
 	sh.window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            "蓝色手柄",
+		Title:            labelsFor(cfg.Language).app,
 		Width:            420,
 		Height:           640,
 		DisableResize:    true,

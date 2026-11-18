@@ -1,4 +1,5 @@
 import { Events, Window } from "@wailsio/runtime";
+import { t, setLocale, type MessageKey } from "./i18n";
 import { Service, type AppInfo, type Settings } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/gui";
 import type { Activity, Stats, Status } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/session";
 import type { Recent } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/config";
@@ -22,7 +23,7 @@ let transport: Transport = "wifi";
 /** Bluetooth devices paired with this PC; null until first loaded */
 let devices: Device[] | null = null;
 /** Why the paired list could not be read, e.g. Bluetooth is off */
-let btUnavailable = "";
+let btUnavailable = false;
 let loadingDevices = false;
 let focusAddr = true;
 /** IDs of text entries the user expanded to read in full */
@@ -85,18 +86,18 @@ function clock(iso: string): string {
 
 function duration(seconds: number): string {
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
-  if (h > 0) return `${h} 小时 ${m} 分`;
-  if (m > 0) return `${m} 分 ${String(s).padStart(2, "0")} 秒`;
-  return `${s} 秒`;
+  if (h > 0) return t("hoursMinutes", { hours: h, minutes: m });
+  if (m > 0) return t("minutesSeconds", { minutes: m, seconds: String(s).padStart(2, "0") });
+  return t("seconds", { seconds: s });
 }
 
 function when(iso: string): string {
   const d = new Date(iso), now = new Date();
   const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const days = Math.round((new Date(now.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86400000);
-  if (days === 0) return `今天 ${hm}`;
-  if (days === 1) return `昨天 ${hm}`;
-  return `${d.getMonth() + 1} 月 ${d.getDate()} 日 ${hm}`;
+  if (days === 0) return t("today", { time: hm });
+  if (days === 1) return t("yesterday", { time: hm });
+  return t("date", { month: d.getMonth() + 1, day: d.getDate(), time: hm });
 }
 
 let toastTimer = 0;
@@ -110,34 +111,34 @@ function toast(msg: string) {
 
 // ---------------------------------------------------------------- errors
 
-const errors: Record<string, { title: string; tips?: string[] }> = {
-  refused: { title: "手机拒绝了连接", tips: ["手机上是否已点「开始连接」并显示“等待电脑接入”", "手机与电脑是否连着同一个 Wi‑Fi", "手机设置里的端口是否和这里一致"] },
-  timeout: { title: "连接超时", tips: ["手机与电脑是否连着同一个 Wi‑Fi", "路由器是否开启了“访客网络”或“AP 隔离”", "地址是否和手机首页显示的一致"] },
-  unreachable: { title: "找不到这个地址", tips: ["电脑是否已连上网络", "地址是否和手机首页显示的一致"] },
-  bad_address: { title: "地址格式不对", tips: ["请填写手机首页显示的地址，例如 192.168.1.5"] },
-  lost: { title: "与手机的连接中断了", tips: ["手机可能锁屏、切到后台或离开了 Wi‑Fi"] },
-  other: { title: "连接失败" },
+const errors: Record<string, { title: MessageKey; tips?: MessageKey[] }> = {
+  refused: { title: "refused", tips: ["checkPhoneListening", "checkSameWifi", "checkMatchingPort"] },
+  timeout: { title: "timeout", tips: ["checkSameWifi", "checkIsolation", "checkMatchingAddress"] },
+  unreachable: { title: "unreachable", tips: ["checkNetwork", "checkMatchingAddress"] },
+  bad_address: { title: "badAddress", tips: ["addressFormatHint"] },
+  lost: { title: "lost", tips: ["lostHint"] },
+  other: { title: "connectionFailed" },
 };
 
-const btErrors: Record<string, { title: string; tips?: string[] }> = {
-  refused: { title: "手机没有在等待蓝牙连接", tips: ["手机上是否已选「蓝牙」并点「开始连接」", "手机是否已和这台电脑配对"] },
-  timeout: { title: "连接超时", tips: ["手机的蓝牙是否打开", "手机是否在电脑附近（10 米以内）"] },
-  unreachable: { title: "找不到这台手机", tips: ["手机的蓝牙是否打开", "手机是否在电脑附近"] },
-  no_bluetooth: { title: "电脑的蓝牙不可用", tips: ["在 Windows 设置里打开蓝牙"] },
-  lost: { title: "与手机的蓝牙连接中断了", tips: ["手机可能离电脑太远，或关闭了蓝牙"] },
+const btErrors: Record<string, { title: MessageKey; tips?: MessageKey[] }> = {
+  refused: { title: "bluetoothRefused", tips: ["checkBluetoothListening", "checkPaired"] },
+  timeout: { title: "timeout", tips: ["checkBluetoothEnabled", "checkRangeMeters"] },
+  unreachable: { title: "bluetoothUnreachable", tips: ["checkBluetoothEnabled", "checkRange"] },
+  no_bluetooth: { title: "noBluetooth", tips: ["enableBluetooth"] },
+  lost: { title: "bluetoothLost", tips: ["bluetoothLostHint"] },
 };
 
 function errorBanner(): HTMLElement | null {
   if (!status.error || status.state === "connected") return null;
   if (status.error === "phone_closed") {
-    return h("div", { class: "banner info", role: "status" }, h("span", { html: icon.infoI }), h("div", {}, "手机已断开连接"));
+    return h("div", { class: "banner info", role: "status" }, h("span", { html: icon.infoI }), h("div", {}, t("phoneDisconnected")));
   }
   const e = (isBT(status.addr) ? btErrors[status.error] : undefined) ?? errors[status.error] ?? errors.other;
   return h("div", { class: "banner err", role: "alert" },
     h("span", { html: icon.alert }),
     h("div", {},
-      h("b", {}, e.title),
-      e.tips ? h("ol", {}, ...e.tips.map((t) => h("li", {}, t))) : h("div", { class: "caption" }, status.detail),
+      h("b", {}, t(e.title)),
+      e.tips ? h("ol", {}, ...e.tips.map((tip) => h("li", {}, t(tip)))) : h("div", { class: "caption" }, status.detail),
     ));
 }
 
@@ -146,7 +147,7 @@ function errorBanner(): HTMLElement | null {
 async function connect(addr: string) {
   addr = addr.trim();
   if (!addr) {
-    toast("请填写手机地址");
+    toast(t("enterAddress"));
     return;
   }
   draftAddr = addr;
@@ -164,10 +165,10 @@ async function loadDevices() {
   render();
   try {
     devices = (await Service.PairedDevices()) ?? [];
-    btUnavailable = "";
+    btUnavailable = false;
   } catch {
     devices = [];
-    btUnavailable = "电脑的蓝牙没有打开，或者这台电脑没有蓝牙。";
+    btUnavailable = true;
   }
   loadingDevices = false;
   render();
@@ -185,22 +186,34 @@ async function refreshRecent() {
   render();
 }
 
+let savingSettings = false;
 async function saveSettings(patch: Partial<Settings>) {
   if (!settings) return;
   const next = { ...settings, ...patch };
+  // Each control submits a full settings snapshot. Wait for the active save.
+  if (savingSettings) return;
+  savingSettings = true;
+  render();
   try {
     await Service.SaveSettings(next);
     settings = next;
   } catch (err) {
-    toast(`保存失败：${err}`);
+    toast(t("saveFailed", { error: String(err) }));
     settings = await Service.Settings();
+  } finally {
+    savingSettings = false;
+    render();
   }
-  render();
 }
 
 // ---------------------------------------------------------------- views
 
 function render() {
+  setLocale(settings?.language);
+  document.title = t("appName");
+  document.getElementById("app-title")!.textContent = document.title;
+  document.getElementById("btn-min")!.setAttribute("aria-label", t("minimize"));
+  document.getElementById("btn-close")!.setAttribute("aria-label", t("close"));
   const active = document.activeElement as HTMLElement | null;
   const keepFocus = active?.id;
   const scroll = document.querySelector(".log .list")?.scrollTop ?? 0;
@@ -215,89 +228,89 @@ function render() {
 function header(title: string): HTMLElement {
   return h("div", { class: "row" },
     h("h1", { class: "h1" }, title), h("div", { class: "grow" }),
-    h("button", { class: "iconbtn", "aria-label": "设置", title: "设置", html: icon.settings, onclick: () => openSettings() }));
+    h("button", { class: "iconbtn", "aria-label": t("settings"), title: t("settings"), html: icon.settings, onclick: () => openSettings() }));
 }
 
 function connectView(): Node[] {
   const busy = status.state === "connecting" || status.retrying;
   const input = h("input", {
-    id: "addr", value: draftAddr, placeholder: "例如 192.168.1.5", inputmode: "decimal",
-    "aria-label": "手机地址", autocomplete: "off", spellcheck: "false", disabled: busy,
+    id: "addr", value: draftAddr, placeholder: t("exampleAddress"), inputmode: "decimal",
+    "aria-label": t("phoneAddress"), autocomplete: "off", spellcheck: "false", disabled: busy,
     oninput: (e: Event) => { draftAddr = (e.target as HTMLInputElement).value; },
     onkeydown: (e: KeyboardEvent) => { if (e.key === "Enter") connect(draftAddr); },
   }) as HTMLInputElement;
 
   const statusLine = busy
     ? h("span", { class: "status", role: "status" }, h("span", { class: "dot wait pulse" }),
-        status.retrying ? `正在等待手机 ${label(status.addr)}，每 3 秒重试`
-          : `正在连接 ${label(status.addr)}…（最长 ${isBT(status.addr) ? 20 : 12} 秒）`)
-    : h("span", { class: "status" }, h("span", { class: "dot" }), "未连接");
+        status.retrying ? t("waiting", { phone: label(status.addr) })
+          : t("connecting", { phone: label(status.addr), seconds: isBT(status.addr) ? 20 : 12 }))
+    : h("span", { class: "status" }, h("span", { class: "dot" }), t("disconnected"));
 
-  const tabs = h("div", { class: "seg", role: "tablist", "aria-label": "连接方式" },
-    ...([["wifi", "Wi‑Fi"], ["bt", "蓝牙"]] as const).map(([k, text]) =>
+  const tabs = h("div", { class: "seg", role: "tablist", "aria-label": t("transport") },
+    ...([["wifi", "Wi‑Fi"], ["bt", t("bluetooth")]] as const).map(([k, text]) =>
       h("button", { role: "tab", class: transport === k ? "on" : "", "aria-selected": String(transport === k), disabled: busy, onclick: () => setTransport(k) }, text)));
 
   const card = transport === "bt" ? btCard(busy, statusLine) : h("div", { class: "card stack" },
     statusLine,
-    h("label", { class: "caption", for: "addr" }, "手机地址（手机首页「本机地址」显示的 IP）"),
+    h("label", { class: "caption", for: "addr" }, t("wifiAddressHint")),
     h("div", { class: "input" }, input, settings && settings.port !== 8088 ? h("span", { class: "suffix" }, `:${settings.port}`) : h("span", { class: "suffix" }, DEFAULT_PORT)),
     errorBanner(),
     busy
-      ? h("button", { class: "btn ghost", onclick: () => Service.Cancel() }, "取消")
-      : h("button", { class: "btn primary", html: icon.power + (status.error ? "重试" : "连接"), onclick: () => connect(draftAddr) }),
-    !status.error && !busy && h("div", { class: "caption" }, "先在手机上打开蓝色手柄，选 Wi‑Fi 并点「开始连接」，再点这里的「连接」。"),
+      ? h("button", { class: "btn ghost", onclick: () => Service.Cancel() }, t("cancel"))
+      : h("button", { class: "btn primary", html: icon.power + (status.error ? t("retry") : t("connect")), onclick: () => connect(draftAddr) }),
+    !status.error && !busy && h("div", { class: "caption" }, t("wifiInstructions")),
   );
 
   const list = recent.length > 0 && h("div", { class: "card", style: "padding:10px 14px" },
-    h("div", { class: "caption", style: "margin:4px 0 4px 4px" }, "最近连接"),
+    h("div", { class: "caption", style: "margin:4px 0 4px 4px" }, t("recent")),
     h("div", {}, ...recent.map((r) => h("div", { class: "item" },
       h("div", { class: "avatar", html: isBT(r.addr) ? icon.bt : icon.phone(18) }),
       h("div", { class: "grow" },
         h("div", { class: "name" }, label(r.addr)),
-        h("div", { class: "sub" }, when(r.last_at) + (r.duration_seconds > 0 ? ` · 连接了 ${duration(r.duration_seconds)}` : ""))),
-      h("button", { class: "forget", "aria-label": `删除 ${label(r.addr)}`, title: "从列表删除", onclick: async () => { await Service.ForgetRecent(r.addr); refreshRecent(); } }, "✕"),
-      h("button", { class: "btn ghost xs", disabled: busy, onclick: () => connect(r.addr) }, "连接"),
+        h("div", { class: "sub" }, when(r.last_at) + (r.duration_seconds > 0 ? t("previousDuration", { duration: duration(r.duration_seconds) }) : ""))),
+      h("button", { class: "forget", "aria-label": t("removePhone", { phone: label(r.addr) }), title: t("removeRecent"), onclick: async () => { await Service.ForgetRecent(r.addr); refreshRecent(); } }, "✕"),
+      h("button", { class: "btn ghost xs", disabled: busy, onclick: () => connect(r.addr) }, t("connect")),
     ))));
 
   return [
-    header("连接手机"),
+    header(t("connectPhone")),
     tabs,
     card,
     list || null,
     h("div", { class: "grow" }),
-    h("div", { class: "caption center" }, transport === "bt" ? "蓝牙连接不需要 Wi‑Fi，手机需在电脑附近"
-      : localIP ? `本机 ${localIP} · 需与手机在同一 Wi‑Fi` : "本机没有连接局域网"),
+    h("div", { class: "caption center" }, transport === "bt" ? t("bluetoothRange")
+      : localIP ? t("localAddress", { ip: localIP }) : t("noLan")),
   ].filter(Boolean) as Node[];
 }
 
 /** The Bluetooth tab: pick a paired phone instead of typing an address. */
 function btCard(busy: boolean, statusLine: Node): HTMLElement {
   let list: Node | null;
-  if (devices === null || loadingDevices) list = h("div", { class: "empty" }, "正在读取已配对的设备…");
+  if (devices === null || loadingDevices) list = h("div", { class: "empty" }, t("loadingDevices"));
   else if (btUnavailable) list = null;
-  else if (devices.length === 0) list = h("div", { class: "empty" }, "还没有和这台电脑配对的设备");
+  else if (devices.length === 0) list = h("div", { class: "empty" }, t("noPairedDevices"));
   else list = h("div", {}, ...devices.map((d) => h("div", { class: "item" },
     h("div", { class: "avatar", html: d.phone ? icon.phone(18) : icon.bt }),
     h("div", { class: "grow" },
       h("div", { class: "name" }, d.name || d.addr.slice(3)),
-      h("div", { class: "sub" }, (d.phone ? "手机 · " : "") + d.addr.slice(3))),
-    h("button", { class: "btn ghost xs", disabled: busy, onclick: () => connect(d.addr) }, "连接"))));
+      h("div", { class: "sub" }, (d.phone ? t("phonePrefix") : "") + d.addr.slice(3))),
+    h("button", { class: "btn ghost xs", disabled: busy, onclick: () => connect(d.addr) }, t("connect")))));
 
   const unavailable = btUnavailable && !status.error
-    ? h("div", { class: "banner err", role: "alert" }, h("span", { html: icon.alert }), h("div", {}, btUnavailable))
+    ? h("div", { class: "banner err", role: "alert" }, h("span", { html: icon.alert }), h("div", {}, t("bluetoothUnavailable")))
     : null;
 
   return h("div", { class: "card stack" },
     statusLine,
     h("div", { class: "row" },
-      h("span", { class: "caption grow" }, "已和电脑配对的设备"),
-      h("button", { class: "linkbtn", disabled: loadingDevices || busy, onclick: loadDevices }, "刷新")),
+      h("span", { class: "caption grow" }, t("pairedDevices")),
+      h("button", { class: "linkbtn", disabled: loadingDevices || busy, onclick: loadDevices }, t("refresh"))),
     list,
     errorBanner() ?? unavailable,
     busy
-      ? h("button", { class: "btn ghost", onclick: () => Service.Cancel() }, "取消")
-      : h("div", { class: "caption" }, "先在手机上打开蓝色手柄，选「蓝牙」并点「开始连接」，再点这里手机后面的「连接」。列表里没有手机？先在电脑的蓝牙设置里和它配对。"),
-    !busy && h("button", { class: "btn ghost sm", onclick: () => Service.OpenBluetoothSettings() }, "打开电脑蓝牙设置"));
+      ? h("button", { class: "btn ghost", onclick: () => Service.Cancel() }, t("cancel"))
+      : h("div", { class: "caption" }, t("bluetoothInstructions")),
+    !busy && h("button", { class: "btn ghost sm", onclick: () => Service.OpenBluetoothSettings() }, t("openBluetoothSettings")));
 }
 
 function connectedView(): Node[] {
@@ -309,32 +322,32 @@ function connectedView(): Node[] {
     h("div", { class: paused ? "phone paused" : "phone", html: paused ? icon.pauseBig : icon.phone(26) }),
     h("div", { class: "grow" },
       paused
-        ? h("span", { class: "status", style: "color:var(--action)" }, h("span", { class: "dot wait" }), "已暂停接收")
-        : h("span", { class: "status", style: "color:#7DD3AC" }, h("span", { class: "dot ok" }), "已连接"),
+        ? h("span", { class: "status", style: "color:var(--action)" }, h("span", { class: "dot wait" }), t("paused"))
+        : h("span", { class: "status", style: "color:#7DD3AC" }, h("span", { class: "dot ok" }), t("connected")),
       h("div", { class: "addr" }, label(status.addr)),
-      h("div", { class: "sub", id: "elapsed" }, paused ? "连接保持中，手机上的操作不会生效" : `已连接 ${duration(elapsed)}`)));
+      h("div", { class: "sub", id: "elapsed" }, paused ? t("pausedHint") : t("connectedDuration", { duration: duration(elapsed) }))));
 
   const card = h("div", { class: "card" },
     hero,
     !paused && h("div", { class: "stats" },
-      h("div", { class: "stat" }, h("b", {}, String(stats.keys)), h("span", { class: "caption" }, "按键")),
-      h("div", { class: "stat" }, h("b", {}, String(stats.texts)), h("span", { class: "caption" }, "段文字")),
+      h("div", { class: "stat" }, h("b", {}, String(stats.keys)), h("span", { class: "caption" }, t("keys"))),
+      h("div", { class: "stat" }, h("b", {}, String(stats.texts)), h("span", { class: "caption" }, t("texts"))),
       h("div", { class: heartbeatOk ? "stat" : "stat bad" },
-        h("b", {}, heartbeatOk ? "正常" : `${Math.round(stats.last_frame_ms / 1000)}s`),
-        h("span", { class: "caption" }, "心跳"))),
+        h("b", {}, heartbeatOk ? t("heartbeatOk") : `${Math.round(stats.last_frame_ms / 1000)}s`),
+        h("span", { class: "caption" }, t("heartbeat")))),
     h("div", { class: "row", style: "margin-top:14px;gap:8px" },
       paused
-        ? h("button", { class: "btn primary sm", html: icon.play + "继续接收", onclick: () => Service.SetPaused(false) })
-        : h("button", { class: "btn warn sm", html: icon.pause + "暂停接收", onclick: () => Service.SetPaused(true) }),
-      h("button", { class: "btn ghost sm", onclick: () => Service.Disconnect() }, "断开")));
+        ? h("button", { class: "btn primary sm", html: icon.play + t("resumeInput"), onclick: () => Service.SetPaused(false) })
+        : h("button", { class: "btn warn sm", html: icon.pause + t("pauseInput"), onclick: () => Service.SetPaused(true) }),
+      h("button", { class: "btn ghost sm", onclick: () => Service.Disconnect() }, t("disconnect"))));
 
   const items = [...activities].reverse();
   const log = h("div", { class: "card log" },
     h("div", { class: "head" },
-      h("span", { class: "caption" }, "最近收到"),
-      items.length > 0 && h("button", { class: "linkbtn", onclick: async () => { await Service.ClearActivities(); activities = []; render(); } }, "清空")),
+      h("span", { class: "caption" }, t("activity")),
+      items.length > 0 && h("button", { class: "linkbtn", onclick: async () => { await Service.ClearActivities(); activities = []; render(); } }, t("clear"))),
     h("div", { class: "list", role: "log", "aria-live": "polite" },
-      ...(items.length ? items.map(activityRow) : [h("div", { class: "empty" }, "在手机上按键或输入文字，这里会显示收到的内容")])));
+      ...(items.length ? items.map(activityRow) : [h("div", { class: "empty" }, t("emptyActivity"))])));
 
   return [card, log];
 }
@@ -349,39 +362,39 @@ function keys(list: string[] | null | undefined): Node[] {
 }
 
 function activityRow(a: Activity): HTMLElement {
-  const t = h("time", {}, clock(a.at));
+  const timestamp = h("time", {}, clock(a.at));
   let body: Node[];
   switch (a.kind) {
     case "combo":
-      body = [h("span", { class: "tag key" }, "组合"), ...keys(a.keys)];
+      body = [h("span", { class: "tag key" }, t("combo")), ...keys(a.keys)];
       break;
     case "hold":
-      body = [h("span", { class: "tag key" }, "按住"), ...keys(a.keys), h("span", { class: "caption" }, `${((a.hold_ms ?? 0) / 1000).toFixed(1)} 秒`)];
+      body = [h("span", { class: "tag key" }, t("hold")), ...keys(a.keys), h("span", { class: "caption" }, t("holdDuration", { seconds: ((a.hold_ms ?? 0) / 1000).toFixed(1) }))];
       break;
     case "text":
-      body = [h("span", { class: "tag text" }, "文字"),
-        h("span", { class: "txt" }, a.text ? a.text : a.chars ? `${a.chars} 个字` : "（只按回车）"),
+      body = [h("span", { class: "tag text" }, t("text")),
+        h("span", { class: "txt" }, a.text ? a.text : a.chars ? t("characters", { count: a.chars }) : t("enterOnly")),
         a.enter ? h("span", { class: "kbd" }, "↵") : null].filter(Boolean) as Node[];
-      if (a.text && (a.chars ?? 0) > EXPAND_CHARS) return expandableRow(a, t, body);
+      if (a.text && (a.chars ?? 0) > EXPAND_CHARS) return expandableRow(a, timestamp, body);
       break;
     case "lock":
-      body = [h("span", { class: "tag sys" }, "锁屏"), h("span", { class: "txt" }, "锁定电脑")];
+      body = [h("span", { class: "tag sys" }, t("lock")), h("span", { class: "txt" }, t("lockPc"))];
       break;
     case "pause":
-      body = [h("span", { class: "tag sys" }, "暂停"), h("span", { class: "txt" }, "在电脑上暂停接收")];
+      body = [h("span", { class: "tag sys" }, t("pause")), h("span", { class: "txt" }, t("pausedOnPc"))];
       break;
     case "resume":
-      body = [h("span", { class: "tag sys" }, "继续"), h("span", { class: "txt" }, "恢复接收")];
+      body = [h("span", { class: "tag sys" }, t("resume")), h("span", { class: "txt" }, t("resumedOnPc"))];
       break;
     default:
-      body = [h("span", { class: "tag key" }, "按键"), ...keys(a.keys)];
+      body = [h("span", { class: "tag key" }, t("keys")), ...keys(a.keys)];
   }
-  if (!a.applied) body.push(h("span", { class: "caption" }, "已忽略"));
-  return h("div", { class: a.applied ? "ev" : "ev dropped" }, t, ...body);
+  if (!a.applied) body.push(h("span", { class: "caption" }, t("ignored")));
+  return h("div", { class: a.applied ? "ev" : "ev dropped" }, timestamp, ...body);
 }
 
 /** A text entry that opens to show the whole text; click again to fold. */
-function expandableRow(a: Activity, t: Node, body: Node[]): HTMLElement {
+function expandableRow(a: Activity, timestamp: Node, body: Node[]): HTMLElement {
   const open = expanded.has(a.id);
   const flip = () => {
     if (window.getSelection()?.toString()) return; // the user is selecting text to copy
@@ -392,16 +405,16 @@ function expandableRow(a: Activity, t: Node, body: Node[]): HTMLElement {
   return h("div", {
     class: `ev expandable${open ? " open" : ""}${a.applied ? "" : " dropped"}`,
     role: "button", tabindex: "0", "aria-expanded": String(open),
-    title: open ? "点击收起" : "点击展开全文",
+    title: open ? t("collapse") : t("expand"),
     onclick: flip,
     onkeydown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } },
-  }, t, ...body, h("span", { class: "chev", html: icon.chevron }));
+  }, timestamp, ...body, h("span", { class: "chev", html: icon.chevron }));
 }
 
 function toggle(id: string, label: string, sub: string | null, checked: boolean, key: keyof Settings): HTMLElement {
   return h("div", { class: "set" },
     h("label", { for: id }, label, sub && h("div", { class: "sub" }, sub)),
-    h("input", { type: "checkbox", role: "switch", class: "sw", id, checked, onchange: (e: Event) => saveSettings({ [key]: (e.target as HTMLInputElement).checked }) }));
+    h("input", { type: "checkbox", disabled: savingSettings, role: "switch", class: "sw", id, checked, onchange: (e: Event) => saveSettings({ [key]: (e.target as HTMLInputElement).checked }) }));
 }
 
 function settingsView(): Node[] {
@@ -409,33 +422,41 @@ function settingsView(): Node[] {
   const s = settings;
   return [
     h("div", { class: "row" },
-      h("button", { class: "iconbtn", "aria-label": "返回", html: icon.back, onclick: () => { view = "main"; render(); } }),
-      h("h1", { class: "h1" }, "设置")),
-    h("div", { class: "section" }, "连接"),
+      h("button", { class: "iconbtn", "aria-label": t("back"), html: icon.back, onclick: () => { view = "main"; render(); } }),
+      h("h1", { class: "h1" }, t("settings"))),
+    h("div", { class: "section" }, t("connectionSection")),
     h("div", { class: "card", style: "padding:6px 16px" },
       h("div", { class: "set" },
-        h("label", { for: "port" }, "端口", h("div", { class: "sub" }, "与手机设置里的端口一致，默认 8088")),
+        h("label", { for: "port" }, t("port"), h("div", { class: "sub" }, t("portHint"))),
         h("input", {
-          class: "port", id: "port", type: "number", min: "1", max: "65535", value: String(s.port),
+          class: "port", id: "port", disabled: savingSettings, type: "number", min: "1", max: "65535", value: String(s.port),
           onchange: (e: Event) => {
             const v = Number((e.target as HTMLInputElement).value);
             if (Number.isInteger(v) && v > 0 && v <= 65535) saveSettings({ port: v });
-            else { toast("端口需在 1–65535 之间"); render(); }
+            else { toast(t("invalidPort")); render(); }
           },
         })),
-      toggle("auto-connect", "启动时自动连接上次的手机", "手机未在等待时每 3 秒重试", s.auto_connect, "auto_connect"),
-      toggle("auto-reconnect", "意外断开后自动重连", null, s.auto_reconnect, "auto_reconnect")),
-    h("div", { class: "section" }, "窗口"),
+      toggle("auto-connect", t("autoConnect"), t("autoConnectHint"), s.auto_connect, "auto_connect"),
+      toggle("auto-reconnect", t("autoReconnect"), null, s.auto_reconnect, "auto_reconnect")),
+    h("div", { class: "section" }, t("window")),
     h("div", { class: "card", style: "padding:6px 16px" },
-      toggle("start-on-boot", "开机自动启动", "启动后只在托盘显示", s.start_on_boot, "start_on_boot"),
-      toggle("close-to-tray", "关闭窗口时缩到托盘", null, s.close_to_tray, "close_to_tray"),
-      toggle("show-text", "最近收到里显示文字内容", "关闭后只显示字数", s.show_text, "show_text")),
+      toggle("start-on-boot", t("launchAtStartup"), t("launchAtStartupHint"), s.start_on_boot, "start_on_boot"),
+      toggle("close-to-tray", t("closeToTray"), null, s.close_to_tray, "close_to_tray"),
+      toggle("show-text", t("showText"), t("showTextHint"), s.show_text, "show_text"),
+      h("div", { class: "set" },
+        h("label", { for: "language" }, t("language")),
+        h("select", {
+          id: "language", disabled: savingSettings,
+          onchange: (e: Event) => saveSettings({ language: (e.target as HTMLSelectElement).value }),
+        },
+        h("option", { value: "zh-CN", selected: s.language !== "en" }, "简体中文"),
+        h("option", { value: "en", selected: s.language === "en" }, "English")))),
     info.elevation_needed && !info.elevated && h("div", { class: "banner info" },
       h("span", { html: icon.infoI }),
-      h("div", {}, "要控制以管理员身份运行的程序（部分游戏、任务管理器），蓝色手柄也需要以管理员身份运行。",
-        h("a", { role: "button", tabindex: "0", onclick: restartAsAdmin, onkeydown: (e: KeyboardEvent) => { if (e.key === "Enter") restartAsAdmin(); } }, "以管理员身份重启"))),
+      h("div", {}, t("adminHint") + " ",
+        h("a", { role: "button", tabindex: "0", onclick: restartAsAdmin, onkeydown: (e: KeyboardEvent) => { if (e.key === "Enter") restartAsAdmin(); } }, t("restartAsAdmin")))),
     h("div", { class: "grow" }),
-    h("div", { class: "caption center" }, `版本 ${info.version}${info.elevated ? " · 管理员" : ""}`),
+    h("div", { class: "caption center" }, t("version", { version: info.version }) + (info.elevated ? t("administratorSuffix") : "")),
   ].filter(Boolean) as Node[];
 }
 
@@ -443,7 +464,7 @@ async function restartAsAdmin() {
   try {
     await Service.RestartAsAdmin();
   } catch {
-    toast("没有以管理员身份重启");
+    toast(t("restartFailed"));
   }
 }
 
