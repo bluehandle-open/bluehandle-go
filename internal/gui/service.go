@@ -4,6 +4,8 @@
 package gui
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/bluehandle-open/bluehandle-go/internal/bluetooth"
@@ -22,13 +24,14 @@ const (
 
 // Settings is the part of config.Config the settings page edits.
 type Settings struct {
-	Port          int  `json:"port"`
-	AutoConnect   bool `json:"auto_connect"`
-	AutoReconnect bool `json:"auto_reconnect"`
-	StartOnBoot   bool `json:"start_on_boot"`
-	CloseToTray   bool `json:"close_to_tray"`
-	ShowText      bool `json:"show_text"`
-	Notify        bool `json:"notify"`
+	Language      string `json:"language"`
+	Port          int    `json:"port"`
+	AutoConnect   bool   `json:"auto_connect"`
+	AutoReconnect bool   `json:"auto_reconnect"`
+	StartOnBoot   bool   `json:"start_on_boot"`
+	CloseToTray   bool   `json:"close_to_tray"`
+	ShowText      bool   `json:"show_text"`
+	Notify        bool   `json:"notify"`
 }
 
 // AppInfo is static information for the footer and the elevation banner.
@@ -42,6 +45,7 @@ type AppInfo struct {
 type Host interface {
 	SetStartOnBoot(on bool) error
 	RestartElevated() error
+	RefreshLanguage()
 }
 
 // Service is bound to the frontend; every exported method becomes a call.
@@ -113,26 +117,40 @@ func (v *Service) LocalIP() string {
 func (v *Service) Settings() Settings {
 	c := v.s.Config()
 	return Settings{
-		Port: c.Port, AutoConnect: c.AutoConnect, AutoReconnect: c.AutoReconnect,
+		Language: config.NormalizeLanguage(c.Language),
+		Port:     c.Port, AutoConnect: c.AutoConnect, AutoReconnect: c.AutoReconnect,
 		StartOnBoot: c.StartOnBoot, CloseToTray: c.CloseToTray, ShowText: c.ShowText, Notify: c.Notify,
 	}
 }
 
 // SaveSettings stores st. Changing StartOnBoot registers or removes the
-// login item first so a failure leaves the setting unchanged.
+// login item first, rolling it back if persisting the settings fails.
 func (v *Service) SaveSettings(st Settings) error {
+	previous := v.s.Config()
 	if st.Port <= 0 || st.Port > 65535 {
-		st.Port = v.s.Config().Port
+		st.Port = previous.Port
 	}
-	if st.StartOnBoot != v.s.Config().StartOnBoot {
+	startupChanged := st.StartOnBoot != previous.StartOnBoot
+	if startupChanged {
 		if err := v.host.SetStartOnBoot(st.StartOnBoot); err != nil {
 			return err
 		}
 	}
-	return v.s.UpdateConfig(func(c *config.Config) {
+	err := v.s.UpdateConfig(func(c *config.Config) {
+		c.Language = config.NormalizeLanguage(st.Language)
 		c.Port, c.AutoConnect, c.AutoReconnect = st.Port, st.AutoConnect, st.AutoReconnect
 		c.StartOnBoot, c.CloseToTray, c.ShowText, c.Notify = st.StartOnBoot, st.CloseToTray, st.ShowText, st.Notify
 	})
+	if err != nil {
+		if startupChanged {
+			if rollbackErr := v.host.SetStartOnBoot(previous.StartOnBoot); rollbackErr != nil {
+				return errors.Join(err, fmt.Errorf("restore launch at startup: %w", rollbackErr))
+			}
+		}
+		return err
+	}
+	v.host.RefreshLanguage()
+	return nil
 }
 
 // Info returns the version and elevation state.

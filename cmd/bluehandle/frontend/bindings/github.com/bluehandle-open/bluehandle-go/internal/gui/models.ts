@@ -14,6 +14,7 @@ export interface AppInfo {
  * Settings is the part of config.Config the settings page edits.
  */
 export interface Settings {
+    "language": string;
     "port": number;
     "auto_connect": boolean;
     "auto_reconnect": boolean;

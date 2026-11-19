@@ -22,6 +22,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "config.json")
 	c := Default()
 	c.Port = 9000
+	c.Language = LanguageEnglish
 	c.ShowText = false
 	at := time.Date(2026, 10, 31, 9, 37, 0, 0, time.UTC)
 	c.Touch("192.168.6.144", at)
@@ -48,7 +49,7 @@ func TestLoadKeepsDefaultsForMissingFieldsAndFixesPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Port != 8088 || c.ShowText || !c.CloseToTray || !c.AutoReconnect {
+	if c.Port != 8088 || c.ShowText || !c.CloseToTray || !c.AutoReconnect || c.Language != LanguageChinese {
 		t.Fatalf("got %+v", c)
 	}
 }

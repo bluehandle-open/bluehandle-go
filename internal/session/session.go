@@ -125,10 +125,14 @@ func (s *Session) Config() config.Config {
 // UpdateConfig applies edit and saves the result.
 func (s *Session) UpdateConfig(edit func(*config.Config)) error {
 	s.mu.Lock()
-	edit(&s.cfg)
+	defer s.mu.Unlock()
 	c := s.copyConfig()
-	s.mu.Unlock()
-	return s.save(c)
+	edit(&c)
+	if err := s.save(c); err != nil {
+		return err
+	}
+	s.cfg = c
+	return nil
 }
 
 // Status returns the current connection status.
@@ -328,10 +332,9 @@ func (s *Session) attempt(ctx context.Context, gen int, hostport string) error {
 	s.cancel = nil
 	start := time.Now()
 	s.cfg.Touch(hostport, start)
-	c := s.copyConfig()
+	_ = s.save(s.copyConfig())
 	st := s.status
 	s.mu.Unlock()
-	_ = s.save(c)
 	s.sink.OnStatus(st)
 	go s.watch(gen, hostport, start)
 	return nil
@@ -346,7 +349,7 @@ func (s *Session) watch(gen int, hostport string, start time.Time) {
 
 	s.mu.Lock()
 	s.cfg.SetDuration(hostport, time.Since(start))
-	c := s.copyConfig()
+	_ = s.save(s.copyConfig())
 	s.held = map[int]time.Time{}
 	current := gen == s.gen
 	if current {
@@ -359,7 +362,6 @@ func (s *Session) watch(gen int, hostport string, start time.Time) {
 	reconnect := current && kind == client.ErrKindLost && s.cfg.AutoReconnect
 	st := s.status
 	s.mu.Unlock()
-	_ = s.save(c)
 	if !current {
 		return
 	}
