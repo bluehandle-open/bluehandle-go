@@ -1,5 +1,5 @@
 import { Events, Window } from "@wailsio/runtime";
-import { t, setLocale, type MessageKey } from "./i18n";
+import { t, setLocale, keyLabel, type MessageKey } from "./i18n";
 import { Service, type AppInfo, type Settings } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/gui";
 import type { Activity, Stats, Status } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/session";
 import type { Recent } from "../bindings/github.com/bluehandle-open/bluehandle-go/internal/config";
@@ -356,7 +356,7 @@ function keys(list: string[] | null | undefined): Node[] {
   const out: Node[] = [];
   (list ?? []).forEach((k, i) => {
     if (i > 0) out.push(document.createTextNode("+"));
-    out.push(h("span", { class: "kbd" }, k));
+    out.push(h("span", { class: "kbd" }, keyLabel(k)));
   });
   return out;
 }

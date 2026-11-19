@@ -4,6 +4,8 @@
 package gui
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/bluehandle-open/bluehandle-go/internal/bluetooth"
@@ -122,12 +124,14 @@ func (v *Service) Settings() Settings {
 }
 
 // SaveSettings stores st. Changing StartOnBoot registers or removes the
-// login item first so a failure leaves the setting unchanged.
+// login item first, rolling it back if persisting the settings fails.
 func (v *Service) SaveSettings(st Settings) error {
+	previous := v.s.Config()
 	if st.Port <= 0 || st.Port > 65535 {
-		st.Port = v.s.Config().Port
+		st.Port = previous.Port
 	}
-	if st.StartOnBoot != v.s.Config().StartOnBoot {
+	startupChanged := st.StartOnBoot != previous.StartOnBoot
+	if startupChanged {
 		if err := v.host.SetStartOnBoot(st.StartOnBoot); err != nil {
 			return err
 		}
@@ -137,10 +141,16 @@ func (v *Service) SaveSettings(st Settings) error {
 		c.Port, c.AutoConnect, c.AutoReconnect = st.Port, st.AutoConnect, st.AutoReconnect
 		c.StartOnBoot, c.CloseToTray, c.ShowText, c.Notify = st.StartOnBoot, st.CloseToTray, st.ShowText, st.Notify
 	})
-	if err == nil {
-		v.host.RefreshLanguage()
+	if err != nil {
+		if startupChanged {
+			if rollbackErr := v.host.SetStartOnBoot(previous.StartOnBoot); rollbackErr != nil {
+				return errors.Join(err, fmt.Errorf("restore launch at startup: %w", rollbackErr))
+			}
+		}
+		return err
 	}
-	return err
+	v.host.RefreshLanguage()
+	return nil
 }
 
 // Info returns the version and elevation state.

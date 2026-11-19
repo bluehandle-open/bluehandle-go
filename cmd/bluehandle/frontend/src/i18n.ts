@@ -120,6 +120,29 @@ type Locale = "zh-CN" | "en";
 export type MessageKey = keyof typeof messages;
 let locale: Locale = "zh-CN";
 
+// The backend keeps Chinese key labels in activity records. Translate only
+// when rendering so existing entries also follow a language change.
+const englishKeyNames = new Map<string, string>([
+  ["退格", "Backspace"],
+  ["空格", "Space"],
+  ["菜单键", "Menu"],
+  ["静音", "Mute"],
+  ["音量-", "Volume −"],
+  ["音量+", "Volume +"],
+  ["下一曲", "Next track"],
+  ["上一曲", "Previous track"],
+  ["停止", "Stop"],
+  ["播放/暂停", "Play / Pause"],
+  ["鼠标左键", "Left mouse button"],
+  ["鼠标右键", "Right mouse button"],
+  ["鼠标中键", "Middle mouse button"],
+]);
+
+export function keyLabel(label: string): string {
+  if (locale !== "en") return label;
+  return englishKeyNames.get(label) ?? label.replace(/^小键盘([0-9])$/, "Numpad $1");
+}
+
 export function setLocale(language: string | undefined) {
   locale = language === "en" ? "en" : "zh-CN";
   document.documentElement.lang = locale;
